@@ -1,4 +1,6 @@
 const productModel = require('../models/product.model');
+const vendorModel = require('../models/vendor.model');
+const { isPositiveNumber } = require('../middleware/validation');
 
 const productController = {
   // Get all products (optionally filter by vendor)
@@ -53,6 +55,31 @@ const productController = {
         return res.status(400).json({
           success: false,
           message: 'Name, price, vendorId, and sku are required'
+        });
+      }
+
+      if (!isPositiveNumber(price)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Price must be a positive number'
+        });
+      }
+
+      // Check if vendor exists
+      const vendor = vendorModel.getById(vendorId);
+      if (!vendor) {
+        return res.status(400).json({
+          success: false,
+          message: 'Vendor not found'
+        });
+      }
+
+      // Check SKU uniqueness
+      const existingProduct = productModel.getAll().find(p => p.sku === sku);
+      if (existingProduct) {
+        return res.status(400).json({
+          success: false,
+          message: 'SKU already exists'
         });
       }
 

@@ -1,4 +1,5 @@
 const vendorModel = require('../models/vendor.model');
+const { isValidEmail, isValidPhone } = require('../middleware/validation');
 
 const vendorController = {
   // Get all vendors
@@ -52,6 +53,20 @@ const vendorController = {
         return res.status(400).json({
           success: false,
           message: 'Name, email, and phone are required'
+        });
+      }
+
+      if (!isValidEmail(email)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid email format'
+        });
+      }
+
+      if (!isValidPhone(phone)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid phone format. Must be at least 10 digits'
         });
       }
 
