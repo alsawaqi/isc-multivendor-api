@@ -37,9 +37,18 @@ const vendorModel = {
     const index = vendors.findIndex(v => v.id === parseInt(id));
     if (index === -1) return null;
     
+    // Only update allowed fields
+    const allowedFields = ['name', 'email', 'phone', 'address', 'status'];
+    const updates = {};
+    allowedFields.forEach(field => {
+      if (data[field] !== undefined) {
+        updates[field] = data[field];
+      }
+    });
+    
     vendors[index] = {
       ...vendors[index],
-      ...data,
+      ...updates,
       id: vendors[index].id,
       createdAt: vendors[index].createdAt,
       updatedAt: new Date().toISOString()

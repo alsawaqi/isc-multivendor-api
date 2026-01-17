@@ -102,6 +102,37 @@ const productController = {
   updateProduct: (req, res) => {
     try {
       const { name, description, price, vendorId, sku, category, stock } = req.body;
+
+      // Validate price if provided
+      if (price !== undefined && !isPositiveNumber(price)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Price must be a positive number'
+        });
+      }
+
+      // Check if vendor exists if vendorId is being updated
+      if (vendorId !== undefined) {
+        const vendor = vendorModel.getById(vendorId);
+        if (!vendor) {
+          return res.status(400).json({
+            success: false,
+            message: 'Vendor not found'
+          });
+        }
+      }
+
+      // Check SKU uniqueness if SKU is being updated
+      if (sku !== undefined) {
+        const existingProduct = productModel.getAll().find(p => p.sku === sku && p.id !== parseInt(req.params.id));
+        if (existingProduct) {
+          return res.status(400).json({
+            success: false,
+            message: 'SKU already exists'
+          });
+        }
+      }
+
       const product = productModel.update(req.params.id, { name, description, price, vendorId, sku, category, stock });
       
       if (!product) {

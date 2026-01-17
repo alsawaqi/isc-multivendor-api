@@ -89,6 +89,23 @@ const vendorController = {
   updateVendor: (req, res) => {
     try {
       const { name, email, phone, address, status } = req.body;
+
+      // Validate email if provided
+      if (email && !isValidEmail(email)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid email format'
+        });
+      }
+
+      // Validate phone if provided
+      if (phone && !isValidPhone(phone)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid phone format. Must be at least 10 digits'
+        });
+      }
+
       const vendor = vendorModel.update(req.params.id, { name, email, phone, address, status });
       
       if (!vendor) {

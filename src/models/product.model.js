@@ -46,9 +46,18 @@ const productModel = {
     const index = products.findIndex(p => p.id === parseInt(id));
     if (index === -1) return null;
     
+    // Only update allowed fields
+    const allowedFields = ['name', 'description', 'price', 'vendorId', 'sku', 'category', 'stock'];
+    const updates = {};
+    allowedFields.forEach(field => {
+      if (data[field] !== undefined) {
+        updates[field] = data[field];
+      }
+    });
+    
     products[index] = {
       ...products[index],
-      ...data,
+      ...updates,
       id: products[index].id,
       createdAt: products[index].createdAt,
       updatedAt: new Date().toISOString()
