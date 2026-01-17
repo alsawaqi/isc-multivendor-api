@@ -1,0 +1,165 @@
+<template>
+  <header
+    class="sticky top-0 z-30 w-full border-b border-slate-200/70 dark:border-slate-800/80 bg-white/90 dark:bg-slate-950/90 backdrop-blur-xl"
+  >
+    <div class="flex items-center justify-between gap-3 px-3 sm:px-5 h-14 sm:h-16">
+      <!-- LEFT: Brand + Hamburger -->
+      <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+        <!-- NEW: Hamburger (MOBILE – opens slide-in sidebar) -->
+        <button
+          type="button"
+          class="inline-flex lg:hidden items-center justify-center h-9 w-9 rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-200 shadow-sm hover:shadow-md hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+          @click="$emit('toggleMobileSidebar')"
+          aria-label="Open sidebar"
+        >
+          <span class="relative flex flex-col justify-center w-4 h-4 gap-[3px]">
+            <span class="h-[2px] w-full rounded-full bg-current"></span>
+            <span class="h-[2px] w-full rounded-full bg-current"></span>
+            <span class="h-[2px] w-full rounded-full bg-current"></span>
+          </span>
+        </button>
+
+        <!-- EXISTING: Hamburger (DESKTOP/TABLET – collapse/expand) -->
+        <button
+          type="button"
+          class="hidden lg:inline-flex items-center justify-center h-9 w-9 rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-200 shadow-sm hover:shadow-md hover:bg-slate-50 dark:hover:bg-slate-800 transition-all lg:-ml-1"
+          @click="$emit('toggleSidebar')"
+          aria-label="Toggle sidebar"
+        >
+          <span class="relative flex flex-col justify-center w-4 h-4 gap-[3px]">
+            <span
+              class="h-[2px] w-full rounded-full bg-current transition-transform duration-200"
+              :class="collapsed ? 'translate-y-[3px] rotate-45' : ''"
+            ></span>
+            <span
+              class="h-[2px] w-full rounded-full bg-current transition-opacity duration-150"
+              :class="collapsed ? 'opacity-0' : 'opacity-80'"
+            ></span>
+            <span
+              class="h-[2px] w-full rounded-full bg-current transition-transform duration-200"
+              :class="collapsed ? '-translate-y-[3px] -rotate-45' : ''"
+            ></span>
+          </span>
+        </button>
+
+        <!-- Brand (small on topbar, main brand is in sidebar) -->
+        <div class="hidden sm:flex items-center gap-2 min-w-0">
+          <div
+            class="h-8 w-8 rounded-2xl bg-gradient-to-br from-primary-500 to-sky-500 flex items-center justify-center text-white text-sm font-semibold shadow-md shadow-sky-900/40"
+          >
+            V
+          </div>
+          <div class="leading-tight hidden md:block">
+            <p class="text-[11px] uppercase font-semibold tracking-[0.18em] text-slate-400 dark:text-slate-500">
+              Vendor Portal
+            </p>
+            <p class="text-xs font-semibold text-slate-800 dark:text-slate-100">
+              ISC Multi-Vendor
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- CENTER: Search (hidden on very small) -->
+      <div class="flex-1 min-w-0 flex justify-center">
+        <div
+          class="hidden md:flex items-center gap-2 w-full max-w-xl px-3 py-1.5 rounded-full border border-slate-200/80 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/80 text-xs text-slate-500 dark:text-slate-400 shadow-sm focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-400 transition-all"
+        >
+          <i class="fa-solid fa-magnifying-glass text-slate-400 dark:text-slate-500 text-sm"></i>
+          <input
+            v-model="search"
+            type="text"
+            placeholder="Search products, orders, reports..."
+            class="flex-1 bg-transparent outline-none text-[13px] text-slate-700 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+          />
+          <button
+            type="button"
+            class="inline-flex items-center gap-1 rounded-full bg-white/70 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 px-2 py-1 text-[10px] font-medium text-slate-500 dark:text-slate-300 shadow-sm"
+          >
+            <span class="hidden lg:inline">Search</span>
+            <span
+              class="px-1 rounded-md bg-slate-100 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700 text-[9px] font-semibold tracking-wide"
+            >
+              ⌘K
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <!-- RIGHT: Theme toggle, notifications, user -->
+      <div class="flex items-center gap-1 sm:gap-2">
+        <!-- Theme toggle -->
+        <button
+          type="button"
+          class="inline-flex items-center justify-center h-9 w-9 rounded-full border border-slate-200/80 dark:border-slate-700 bg-white/90 dark:bg-slate-900/90 text-slate-600 dark:text-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
+          @click="toggleTheme"
+        >
+          <span v-if="isDark">🌙</span>
+          <span v-else>☀️</span>
+        </button>
+
+        <!-- Notifications -->
+        <button
+          type="button"
+          class="relative inline-flex items-center justify-center h-9 w-9 rounded-full border border-slate-200/80 dark:border-slate-700 bg-white/90 dark:bg-slate-900/90 text-slate-500 dark:text-slate-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
+        >
+          <i class="fa-regular fa-bell text-sm"></i>
+          <span
+            class="absolute -top-0.5 -right-0.5 h-4 min-w-[16px] rounded-full bg-rose-500 text-[9px] font-semibold text-white flex items-center justify-center px-[3px] shadow-sm"
+          >
+            3
+          </span>
+        </button>
+
+        <!-- User dropdown trigger -->
+        <button
+          type="button"
+          class="inline-flex items-center gap-2 pl-1 pr-2 py-1.5 rounded-full bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
+        >
+          <div
+            class="h-8 w-8 rounded-full bg-gradient-to-br from-sky-500 to-primary-500 text-[13px] font-semibold text-white flex items-center justify-center"
+          >
+            {{ initials }}
+          </div>
+          <div class="hidden sm:flex flex-col items-start leading-tight max-w-[140px]">
+            <span class="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">
+              {{ vendorName }}
+            </span>
+            <span class="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+              {{ vendorEmail }}
+            </span>
+          </div>
+        </button>
+      </div>
+    </div>
+  </header>
+</template>
+
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import { useTheme } from '../../composables/useTheme'
+
+const props = defineProps<{
+  vendorName?: string
+  vendorEmail?: string
+  collapsed?: boolean
+}>()
+
+defineEmits<{
+  (e: 'toggleSidebar'): void
+  (e: 'toggleMobileSidebar'): void
+}>()
+
+const { isDark, toggleTheme } = useTheme()
+const search = ref('')
+
+const initials = computed(() => {
+  if (!props.vendorName) return 'VD'
+  return props.vendorName
+    .split(' ')
+    .map((p) => p.charAt(0))
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+})
+</script>
