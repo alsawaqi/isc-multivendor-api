@@ -1,4 +1,86 @@
-<template>
+<script setup lang="ts">
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
+import { useTheme } from '../../composables/useTheme'
+import { useVendorAuth } from '../../composables/useVendorAuth'
+
+const props = defineProps<{
+  vendorName?: string
+  vendorEmail?: string
+  collapsed?: boolean
+}>()
+
+defineEmits<{
+  (e: 'toggleSidebar'): void
+  (e: 'toggleMobileSidebar'): void
+}>()
+
+const router = useRouter()
+const auth = useVendorAuth()
+
+const { isDark, toggleTheme } = useTheme()
+const search = ref('')
+
+const userMenuOpen = ref(false)
+const menuWrapperRef = ref<HTMLElement | null>(null)
+const triggerRef = ref<HTMLElement | null>(null)
+const menuRef = ref<HTMLElement | null>(null)
+
+const vendorNameSafe = computed(() => props.vendorName || 'Vendor')
+const vendorEmailSafe = computed(() => props.vendorEmail || '')
+
+const initials = computed(() => {
+  if (!vendorNameSafe.value) return 'VD'
+  return vendorNameSafe.value
+    .split(' ')
+    .filter(Boolean)
+    .map((p) => p.charAt(0))
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+})
+
+function toggleUserMenu() {
+  userMenuOpen.value = !userMenuOpen.value
+}
+
+function closeUserMenu() {
+  userMenuOpen.value = false
+}
+
+async function handleLogout() {
+  try {
+    await auth.logout()
+  } finally {
+    closeUserMenu()
+    // route to your login page (you currently use "/")
+    await router.push('/')
+  }
+}
+
+// Close menu on outside click or ESC
+function onDocClick(e: MouseEvent) {
+  if (!userMenuOpen.value) return
+  const target = e.target as Node
+  const wrapper = menuWrapperRef.value
+  if (wrapper && !wrapper.contains(target)) closeUserMenu()
+}
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') closeUserMenu()
+}
+
+onMounted(() => {
+  document.addEventListener('click', onDocClick)
+  document.addEventListener('keydown', onKeydown)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocClick)
+  document.removeEventListener('keydown', onKeydown)
+})
+</script>
+ <template>
   <header
     class="sticky top-0 z-30 w-full border-b border-slate-200/70 dark:border-slate-800/80 bg-white/90 dark:bg-slate-950/90 backdrop-blur-xl"
   >
@@ -42,7 +124,7 @@
           </span>
         </button>
 
-        <!-- Brand (small on topbar, main brand is in sidebar) -->
+        <!-- Brand -->
         <div class="hidden sm:flex items-center gap-2 min-w-0">
           <div
             class="h-8 w-8 rounded-2xl bg-gradient-to-br from-primary-500 to-sky-500 flex items-center justify-center text-white text-sm font-semibold shadow-md shadow-sky-900/40"
@@ -60,7 +142,7 @@
         </div>
       </div>
 
-      <!-- CENTER: Search (hidden on very small) -->
+      <!-- CENTER: Search -->
       <div class="flex-1 min-w-0 flex justify-center">
         <div
           class="hidden md:flex items-center gap-2 w-full max-w-xl px-3 py-1.5 rounded-full border border-slate-200/80 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/80 text-xs text-slate-500 dark:text-slate-400 shadow-sm focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-400 transition-all"
@@ -86,7 +168,7 @@
         </div>
       </div>
 
-      <!-- RIGHT: Theme toggle, notifications, user -->
+      <!-- RIGHT -->
       <div class="flex items-center gap-1 sm:gap-2">
         <!-- Theme toggle -->
         <button
@@ -111,55 +193,81 @@
           </span>
         </button>
 
-        <!-- User dropdown trigger -->
-        <button
-          type="button"
-          class="inline-flex items-center gap-2 pl-1 pr-2 py-1.5 rounded-full bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
-        >
-          <div
-            class="h-8 w-8 rounded-full bg-gradient-to-br from-sky-500 to-primary-500 text-[13px] font-semibold text-white flex items-center justify-center"
+        <!-- User dropdown wrapper -->
+        <div class="relative" ref="menuWrapperRef">
+          <!-- Trigger -->
+          <button
+            ref="triggerRef"
+            type="button"
+            class="inline-flex items-center gap-2 pl-1 pr-2 py-1.5 rounded-full bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
+            @click="toggleUserMenu"
+            :aria-expanded="userMenuOpen ? 'true' : 'false'"
+            aria-haspopup="menu"
           >
-            {{ initials }}
-          </div>
-          <div class="hidden sm:flex flex-col items-start leading-tight max-w-[140px]">
-            <span class="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">
-              {{ vendorName }}
-            </span>
-            <span class="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-              {{ vendorEmail }}
-            </span>
-          </div>
-        </button>
+            <div
+              class="h-8 w-8 rounded-full bg-gradient-to-br from-sky-500 to-primary-500 text-[13px] font-semibold text-white flex items-center justify-center"
+            >
+              {{ initials }}
+            </div>
+            <div class="hidden sm:flex flex-col items-start leading-tight max-w-[140px]">
+              <span class="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">
+                {{ vendorNameSafe }}
+              </span>
+              <span class="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                {{ vendorEmailSafe }}
+              </span>
+            </div>
+
+            <i
+              class="fa-solid fa-chevron-down text-[10px] text-slate-500 dark:text-slate-400 ml-1 transition-transform"
+              :class="userMenuOpen ? 'rotate-180' : ''"
+            ></i>
+          </button>
+
+          <!-- Dropdown -->
+          <transition name="fade-scale">
+            <div
+              v-if="userMenuOpen"
+              ref="menuRef"
+              class="absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200/80 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl shadow-lg overflow-hidden"
+              role="menu"
+            >
+              <div class="px-3 py-2 border-b border-slate-200/70 dark:border-slate-700/70">
+                <p class="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">
+                  {{ vendorNameSafe }}
+                </p>
+                <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                  {{ vendorEmailSafe }}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                class="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/70 transition-colors"
+                role="menuitem"
+                @click="handleLogout"
+              >
+                <i class="fa-solid fa-right-from-bracket text-slate-500 dark:text-slate-400"></i>
+                <span class="font-medium">Logout</span>
+              </button>
+            </div>
+          </transition>
+        </div>
       </div>
     </div>
   </header>
 </template>
 
-<script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useTheme } from '../../composables/useTheme'
 
-const props = defineProps<{
-  vendorName?: string
-  vendorEmail?: string
-  collapsed?: boolean
-}>()
 
-defineEmits<{
-  (e: 'toggleSidebar'): void
-  (e: 'toggleMobileSidebar'): void
-}>()
-
-const { isDark, toggleTheme } = useTheme()
-const search = ref('')
-
-const initials = computed(() => {
-  if (!props.vendorName) return 'VD'
-  return props.vendorName
-    .split(' ')
-    .map((p) => p.charAt(0))
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
-})
-</script>
+<style scoped>
+.fade-scale-enter-active,
+.fade-scale-leave-active {
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+.fade-scale-enter-from,
+.fade-scale-leave-to {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
+}
+</style>

@@ -1,4 +1,4 @@
- <script setup lang="ts">
+<script setup lang="ts">
 import { useRoute, RouterLink } from 'vue-router'
 
 interface MenuItem {
@@ -56,6 +56,16 @@ const secondaryItems: MenuItem[] = [
     description: 'Manage catalog',
     to: '/products',
   },
+
+  {
+    key: 'viewproducts',
+    label: 'View Products',
+    icon: 'fa-solid fa-box-open',
+    description: 'Manage catalog',
+    to: '/viewproducts',
+  },
+
+  
   // {
   //   key: 'settings',
   //   label: 'Settings',

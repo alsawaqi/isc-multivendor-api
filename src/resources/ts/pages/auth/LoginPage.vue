@@ -1,15 +1,18 @@
  <!-- resources/ts/pages/auth/LoginPage.vue -->
 <script setup lang="ts">
 import { reactive, ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
-import axios from 'axios'
+import { useRouter, useRoute } from 'vue-router'
 import { useTheme } from '../../composables/useTheme'
+import { useVendorAuth } from '../../composables/useVendorAuth'
+
 const router = useRouter()
+const route = useRoute()
+const auth = useVendorAuth()
 
 const year = computed(() => new Date().getFullYear())
 
 const form = reactive({
-  email: '',
+  email: '',     // can be email OR username (we’ll pass it as "login")
   password: '',
   remember: true,
 })
@@ -21,30 +24,28 @@ const errorMessage = ref<string | null>(null)
 const { isDark, toggleTheme } = useTheme()
 
 const handleSubmit = async () => {
+  isSubmitting.value = true
+  errorMessage.value = null
 
-     await router.push({ name: 'vendor.dashboard' })
-//   isSubmitting.value = true
-//   errorMessage.value = null
+  try {
+    // IMPORTANT: we pass email field as "login" (email or username)
+    await auth.login(form.email, form.password, form.remember)
 
-//   try {
-//     const { data } = await axios.post('/api/vendor/login', {
-//       email: form.email,
-//       password: form.password,
-//       remember: form.remember,
-//     })
-
-//     console.log('Login success', data)
-//     // window.location.href = '/vendor/dashboard'
-//   } catch (error: any) {
-//     errorMessage.value =
-//       error?.response?.data?.message ||
-//       error?.message ||
-//       'Login failed. Please check your credentials.'
-//   } finally {
-//     isSubmitting.value = false
-//   }
+    // redirect if user tried to access protected route first
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/dashboard'
+    await router.push(redirect)
+  } catch (error: any) {
+    errorMessage.value =
+      error?.response?.data?.message ||
+      error?.response?.data?.errors?.login?.[0] ||
+      error?.message ||
+      'Login failed. Please check your credentials.'
+  } finally {
+    isSubmitting.value = false
+  }
 }
 </script>
+
 <template>
   <div
     class="relative min-h-screen flex items-center justify-center overflow-hidden bg-slate-50 dark:bg-slate-950 transition-colors duration-300"
@@ -260,8 +261,6 @@ const handleSubmit = async () => {
     </div>
   </div>
 </template>
-
-
 
 <style scoped>
 @keyframes card-pop {
