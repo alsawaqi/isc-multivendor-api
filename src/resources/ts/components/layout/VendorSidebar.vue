@@ -30,6 +30,22 @@ const mainItems: MenuItem[] = [
     badge: 'Live',
     to: '/dashboard',
   },
+
+
+  {
+    key: 'orders',
+    label: 'Orders',
+    icon: 'fa-solid fa-cart-shopping',
+    description: 'View vendor orders',
+    to: '/orders',
+  },
+  {
+    key: 'payouts',
+    label: 'Payouts',
+    icon: 'fa-solid fa-money-bill-transfer',
+    description: 'Commission & payments',
+    to: '/payouts',
+  },
   // later:
   // {
   //   key: 'orders',

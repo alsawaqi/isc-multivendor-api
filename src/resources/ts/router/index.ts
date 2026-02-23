@@ -29,6 +29,33 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
 
+    {
+      path: '/orders',
+      name: 'vendor.orders',
+      component: () => import('../pages/dashboard/VendorOrders.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/payouts',
+      name: 'vendor.payouts',
+      component: () => import('../pages/dashboard/VendorPayouts.vue'),
+      meta: { requiresAuth: true },
+    },
+
+
+
+    {
+      path: '/products/temp/:id',
+      name: 'vendor.product.pending.show',
+      component: () => import('../pages/dashboard/VendorProductDetails.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/products/:id',
+      name: 'vendor.product.approved.show',
+      component: () => import('../pages/dashboard/VendorProductDetails.vue'),
+      meta: { requiresAuth: true },
+    },
 
     
     // ✅ Error page (for API failures, permission errors, etc.)

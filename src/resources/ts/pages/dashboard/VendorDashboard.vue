@@ -1,204 +1,358 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import VendorLayout from '../../components/layout/VendorLayout.vue'
-import VendorPageHeader from '../../components/layout/VendorPageHeader.vue'
- const pageTitle = ref<string>('Dashboard')
-    const pageDescription = ref<string>('Manage your vendor account and activities.')
+import { computed, onMounted, ref } from "vue"
+import VendorLayout from "@/components/layout/VendorLayout.vue"
+import VendorPageHeader from "@/components/layout/VendorPageHeader.vue"
+import api from "@/services/api"
 
-const recentOrders = ref<Array<{ id: number; code: string; customer: string; date: string; total: string; status: string }>>([
-  { id: 1, code: 'ORD-1024', customer: 'Ali Trading LLC', date: 'Today · 10:24', total: '145.000', status: 'Paid' },
-  { id: 2, code: 'ORD-1023', customer: 'Global Industrial', date: 'Today · 09:18', total: '89.500', status: 'Pending' },
-  { id: 3, code: 'ORD-1022', customer: 'Duqm Projects', date: 'Yesterday · 17:42', total: '320.000', status: 'Paid' },
-]);
+type EarningsSummary = {
+  total_orders: number
+  gross_sales: number
+  commission_total: number
+  net_earnings_total: number
+  paid_payout_total: number
+  pending_payout_total: number
+  unpaid_payout_total: number
+  requested_payout_total: number
+  commission_set_orders: number
+  paid_orders_count: number
+  requested_orders_count: number
+  unpaid_orders_count: number
+}
 
 
+type TopSoldProduct = {
+  product_id: number
+  product_name?: string | null
+  product_code?: string | null
+  units_sold: number
+  orders_count: number
+  sales_total: number
+}
+
+type RecentOrder = {
+  id: number
+  Orders_Placed_Id: number
+  Vendor_Order_Code?: string | null
+  Status?: string | null
+  Payout_Status?: string | null
+  Sub_Total?: number
+  Commission_Amount?: number
+  Expected_Payout_Amount?: number
+  Payout_Amount?: number | null
+  Payout_At?: string | null
+  created_at?: string | null
+}
+
+type ProductSummary = {
+  pending?: { total?: number }
+  approved?: { total?: number }
+}
+
+const loading = ref(false)
+const error = ref<string | null>(null)
+
+const dateFrom = ref("")
+const dateTo = ref("")
+
+
+const topSoldProduct = ref<TopSoldProduct | null>(null)
+
+const summary = ref<EarningsSummary>({
+  total_orders: 0,
+  gross_sales: 0,
+  commission_total: 0,
+  net_earnings_total: 0,
+  paid_payout_total: 0,
+  pending_payout_total: 0,
+  unpaid_payout_total: 0,
+  requested_payout_total: 0,
+  commission_set_orders: 0,
+  paid_orders_count: 0,
+  requested_orders_count: 0,
+  unpaid_orders_count: 0,
+})
+
+const recentOrders = ref<RecentOrder[]>([])
+const productSummary = ref<ProductSummary>({})
+
+const approvedProducts = computed(() => Number(productSummary.value?.approved?.total ?? 0))
+const pendingProducts = computed(() => Number(productSummary.value?.pending?.total ?? 0))
+
+const money = (v: any) => {
+  const n = Number(v ?? 0)
+  return Number.isFinite(n) ? n.toFixed(3) : "0.000"
+}
+
+const fmtDate = (v?: string | null) => {
+  if (!v) return "-"
+  const d = new Date(v)
+  return Number.isNaN(d.getTime()) ? v : d.toLocaleString()
+}
+
+async function fetchDashboard() {
+  loading.value = true
+  error.value = null
+  try {
+    const params: any = {}
+    if (dateFrom.value) params.date_from = dateFrom.value
+    if (dateTo.value) params.date_to = dateTo.value
+
+    const [earningsRes, productsRes] = await Promise.all([
+      api.get("/vendor/api/earnings/summary", { params }),
+      api.get("/vendor/api/products/summary"),
+    ])
+
+    summary.value = earningsRes.data?.data?.summary || summary.value
+    recentOrders.value = earningsRes.data?.data?.recent_orders || []
+    productSummary.value = productsRes.data || {}
+    topSoldProduct.value = earningsRes.data?.data?.top_sold_product || null
+  } catch (e: any) {
+    error.value = e?.response?.data?.message || "Failed to load dashboard data."
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(fetchDashboard)
 </script>
+
 <template>
-
-    <VendorLayout vendor-name="Acme Tools" vendor-email="tools@acme.com">
-
-        <VendorPageHeader
-          :title="pageTitle"
-          :description="pageDescription"
-          icon="fa-solid fa-receipt"
-        />
-        <!-- Stats row -->
-        <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <div
-            class="rounded-2xl bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800 shadow-soft p-4 flex flex-col gap-2"
+  <VendorLayout>
+    <VendorPageHeader
+      title="Vendor Dashboard"
+      description="Track your sales, commissions, payouts, and recent vendor orders."
+      icon="fa-solid fa-chart-line"
+    >
+      <template #actions>
+        <div class="flex flex-wrap items-center gap-2">
+          <input
+            v-model="dateFrom"
+            type="date"
+            class="h-9 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm"
+          />
+          <input
+            v-model="dateTo"
+            type="date"
+            class="h-9 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm"
+          />
+          <button
+            class="h-9 px-3 rounded-xl bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 disabled:opacity-60"
+            :disabled="loading"
+            @click="fetchDashboard"
           >
-            <div class="flex items-center justify-between">
-              <p class="text-xs font-medium text-slate-500 dark:text-slate-400">
-                Today’s Orders
-              </p>
-              <span class="inline-flex items-center rounded-full bg-emerald-500/10 text-emerald-500 px-2 py-0.5 text-[10px]">
-                +18%
-              </span>
-            </div>
-            <p class="text-xl font-semibold tracking-tight">42</p>
-            <p class="text-[11px] text-slate-400 dark:text-slate-500">
-              Compared to yesterday
-            </p>
+            Refresh
+          </button>
+        </div>
+      </template>
+    </VendorPageHeader>
+
+    <div v-if="error" class="rounded-xl border border-rose-200 bg-rose-50 text-rose-700 px-4 py-3 text-sm">
+      {{ error }}
+    </div>
+
+    <!-- Top cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-4">
+        <p class="text-xs text-slate-500">Gross Sales</p>
+        <p class="text-2xl font-semibold mt-1">{{ money(summary.gross_sales) }}</p>
+      </div>
+
+      <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-4">
+        <p class="text-xs text-slate-500">Commission Total</p>
+        <p class="text-2xl font-semibold mt-1">{{ money(summary.commission_total) }}</p>
+      </div>
+
+      <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-4">
+        <p class="text-xs text-slate-500">Net Earnings</p>
+        <p class="text-2xl font-semibold mt-1 text-emerald-600">{{ money(summary.net_earnings_total) }}</p>
+      </div>
+
+      <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-4">
+        <p class="text-xs text-slate-500">Pending Payouts</p>
+        <p class="text-2xl font-semibold mt-1 text-amber-600">{{ money(summary.pending_payout_total) }}</p>
+      </div>
+    </div>
+
+    <!-- Secondary cards -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-semibold">Payout Status</h3>
+          <RouterLink to="/payouts" class="text-xs text-primary-600 hover:underline">View payouts</RouterLink>
+        </div>
+        <div class="mt-3 space-y-2 text-sm">
+          <div class="flex justify-between">
+            <span class="text-slate-500">Paid Amount</span>
+            <span class="font-medium">{{ money(summary.paid_payout_total) }}</span>
           </div>
-
-          <div
-            class="rounded-2xl bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800 shadow-soft p-4 flex flex-col gap-2"
-          >
-            <div class="flex items-center justify-between">
-              <p class="text-xs font-medium text-slate-500 dark:text-slate-400">
-                Revenue (OMR)
-              </p>
-              <i class="fa-solid fa-coins text-amber-400"></i>
-            </div>
-            <p class="text-xl font-semibold tracking-tight">1,245.800</p>
-            <p class="text-[11px] text-slate-400 dark:text-slate-500">
-              Pending settlement: <span class="font-semibold">320.500</span>
-            </p>
+          <div class="flex justify-between">
+            <span class="text-slate-500">Unpaid Amount</span>
+            <span class="font-medium">{{ money(summary.unpaid_payout_total) }}</span>
           </div>
-
-          <div
-            class="rounded-2xl bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800 shadow-soft p-4 flex flex-col gap-2"
-          >
-            <div class="flex items-center justify-between">
-              <p class="text-xs font-medium text-slate-500 dark:text-slate-400">
-                Active Products
-              </p>
-              <i class="fa-solid fa-box-open text-primary-500"></i>
-            </div>
-            <p class="text-xl font-semibold tracking-tight">128</p>
-            <p class="text-[11px] text-slate-400 dark:text-slate-500">
-              5 awaiting approval
-            </p>
+          <div class="flex justify-between">
+            <span class="text-slate-500">Requested Amount</span>
+            <span class="font-medium">{{ money(summary.requested_payout_total) }}</span>
           </div>
-
-          <div
-            class="rounded-2xl bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800 shadow-soft p-4 flex flex-col gap-2"
-          >
-            <div class="flex items-center justify-between">
-              <p class="text-xs font-medium text-slate-500 dark:text-slate-400">
-                Rating
-              </p>
-              <i class="fa-solid fa-star text-yellow-400"></i>
-            </div>
-            <p class="text-xl font-semibold tracking-tight">4.8</p>
-            <p class="text-[11px] text-slate-400 dark:text-slate-500">
-              Based on 231 reviews
-            </p>
+          <hr class="border-slate-200 dark:border-slate-800" />
+          <div class="flex justify-between">
+            <span class="text-slate-500">Paid Orders</span>
+            <span class="font-medium">{{ summary.paid_orders_count }}</span>
           </div>
-        </section>
+          <div class="flex justify-between">
+            <span class="text-slate-500">Unpaid Orders</span>
+            <span class="font-medium">{{ summary.unpaid_orders_count }}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500">Requested Orders</span>
+            <span class="font-medium">{{ summary.requested_orders_count }}</span>
+          </div>
+        </div>
+      </div>
 
-        <!-- Split layout -->
-        <section class="grid gap-4 lg:grid-cols-3">
-          <!-- Left: recent orders -->
-          <div
-            class="lg:col-span-2 rounded-2xl bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800 shadow-soft p-4 sm:p-5"
+      <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-semibold">Products</h3>
+          <RouterLink to="/viewproducts" class="text-xs text-primary-600 hover:underline">View products</RouterLink>
+        </div>
+        <div class="mt-3 grid grid-cols-2 gap-3">
+          <div class="rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3">
+            <p class="text-xs text-slate-500">Approved</p>
+            <p class="text-xl font-semibold">{{ approvedProducts }}</p>
+          </div>
+          <div class="rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3">
+            <p class="text-xs text-slate-500">Pending</p>
+            <p class="text-xl font-semibold">{{ pendingProducts }}</p>
+          </div>
+        </div>
+        <div class="mt-3 text-xs text-slate-500">
+          Total vendor orders: <span class="font-medium text-slate-700 dark:text-slate-200">{{ summary.total_orders }}</span>
+        </div>
+      </div>
+
+      <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-semibold">Quick Actions</h3>
+        </div>
+        <div class="mt-3 grid gap-2">
+          <RouterLink
+            to="/orders"
+            class="rounded-xl border border-slate-200 dark:border-slate-800 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-900"
           >
-            <div class="flex items-center justify-between mb-3">
-              <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-50">
-                Recent Orders
-              </h2>
-              <button
-                type="button"
-                class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
-              >
-                View all
-              </button>
-            </div>
+            <i class="fa-solid fa-cart-shopping mr-2"></i> View Orders
+          </RouterLink>
+          <RouterLink
+            to="/payouts"
+            class="rounded-xl border border-slate-200 dark:border-slate-800 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-900"
+          >
+            <i class="fa-solid fa-money-bill-transfer mr-2"></i> View Payouts
+          </RouterLink>
+          <RouterLink
+            to="/viewproducts"
+            class="rounded-xl border border-slate-200 dark:border-slate-800 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-900"
+          >
+            <i class="fa-solid fa-box-open mr-2"></i> View Products
+          </RouterLink>
+          <RouterLink
+            to="/products"
+            class="rounded-xl border border-slate-200 dark:border-slate-800 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-900"
+          >
+            <i class="fa-solid fa-plus mr-2"></i> Add Product
+          </RouterLink>
+        </div>
+      </div>
+    </div>
 
-            <div class="space-y-2 text-xs">
-              <div
-                v-for="order in recentOrders"
-                :key="order.id"
-                class="flex items-center justify-between rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 px-3 py-2"
-              >
-                <div class="flex flex-col">
-                  <span class="font-medium text-slate-800 dark:text-slate-100">
-                    #{{ order.code }}
+
+    <div class="mt-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3">
+  <div class="flex items-center justify-between">
+    <p class="text-xs text-slate-500">Most Sold Product</p>
+    <span v-if="topSoldProduct" class="text-[11px] text-emerald-600 font-medium">
+      {{ topSoldProduct.units_sold }} sold
+    </span>
+  </div>
+
+  <template v-if="topSoldProduct">
+    <p class="text-sm font-semibold mt-1 truncate">
+      {{ topSoldProduct.product_name || ("Product #" + topSoldProduct.product_id) }}
+    </p>
+    <div class="mt-2 grid grid-cols-2 gap-2 text-xs">
+      <div class="rounded-lg bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 px-2 py-1.5">
+        <p class="text-slate-500">Orders</p>
+        <p class="font-semibold">{{ topSoldProduct.orders_count }}</p>
+      </div>
+      <div class="rounded-lg bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 px-2 py-1.5">
+        <p class="text-slate-500">Sales</p>
+        <p class="font-semibold">{{ money(topSoldProduct.sales_total) }}</p>
+      </div>
+    </div>
+    <p v-if="topSoldProduct.product_code" class="mt-2 text-[11px] text-slate-500 truncate">
+      Code: {{ topSoldProduct.product_code }}
+    </p>
+  </template>
+
+  <p v-else class="text-xs text-slate-500 mt-1">
+    No sales yet for the selected period.
+  </p>
+</div>
+
+    <!-- Recent orders -->
+    <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden">
+      <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <h3 class="text-sm font-semibold">Recent Vendor Orders</h3>
+        <RouterLink to="/orders" class="text-xs text-primary-600 hover:underline">See all</RouterLink>
+      </div>
+
+      <div v-if="loading" class="p-6 text-sm text-slate-500">Loading dashboard...</div>
+
+      <div v-else class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-50 dark:bg-slate-900/50 text-slate-500">
+            <tr>
+              <th class="px-4 py-3 text-left">Vendor Order</th>
+              <th class="px-4 py-3 text-left">Order</th>
+              <th class="px-4 py-3 text-left">Status</th>
+              <th class="px-4 py-3 text-right">Subtotal</th>
+              <th class="px-4 py-3 text-right">Commission</th>
+              <th class="px-4 py-3 text-right">Net</th>
+              <th class="px-4 py-3 text-left">Created</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="r in recentOrders"
+              :key="r.id"
+              class="border-t border-slate-100 dark:border-slate-800"
+            >
+              <td class="px-4 py-3 font-medium">{{ r.Vendor_Order_Code || ("#" + r.id) }}</td>
+              <td class="px-4 py-3">#{{ r.Orders_Placed_Id }}</td>
+              <td class="px-4 py-3">
+                <div class="flex flex-col gap-1">
+                  <span class="text-xs rounded-full px-2 py-0.5 w-fit bg-slate-100 dark:bg-slate-800">
+                    {{ r.Status || "pending" }}
                   </span>
-                  <span class="text-[11px] text-slate-400 dark:text-slate-500">
-                    {{ order.customer }} · {{ order.date }}
-                  </span>
-                </div>
-                <div class="flex items-center gap-4">
-                  <span class="text-[11px] font-semibold text-slate-700 dark:text-slate-200">
-                    {{ order.total }} OMR
-                  </span>
-                  <span
-                    class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                    :class="order.status === 'Paid'
-                      ? 'bg-emerald-500/10 text-emerald-500'
-                      : order.status === 'Pending'
-                      ? 'bg-amber-500/10 text-amber-500'
-                      : 'bg-slate-500/10 text-slate-400'"
+                  <span class="text-xs rounded-full px-2 py-0.5 w-fit"
+                    :class="r.Payout_Status === 'paid'
+                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'
+                      : 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'"
                   >
-                    {{ order.status }}
+                    payout: {{ r.Payout_Status || 'unpaid' }}
                   </span>
                 </div>
-              </div>
-            </div>
-          </div>
+              </td>
+              <td class="px-4 py-3 text-right">{{ money(r.Sub_Total) }}</td>
+              <td class="px-4 py-3 text-right">{{ money(r.Commission_Amount) }}</td>
+              <td class="px-4 py-3 text-right font-medium">{{ money(r.Expected_Payout_Amount) }}</td>
+              <td class="px-4 py-3 text-xs text-slate-500">{{ fmtDate(r.created_at) }}</td>
+            </tr>
 
-          <!-- Right: quick actions -->
-          <div
-            class="rounded-2xl bg-white/90 dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800 shadow-soft p-4 sm:p-5 flex flex-col gap-3"
-          >
-            <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-50">
-              Quick Actions
-            </h2>
-            <p class="text-xs text-slate-500 dark:text-slate-400">
-              Shortcuts to your most common tasks.
-            </p>
-
-            <div class="space-y-2 text-xs">
-              <button
-                type="button"
-                class="w-full inline-flex items-center justify-between rounded-xl border border-dashed border-primary-300/70 dark:border-primary-500/50 bg-primary-50/70 dark:bg-primary-500/10 px-3 py-2 hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-500/15 transition-colors"
-              >
-                <span class="flex items-center gap-2 text-primary-700 dark:text-primary-200">
-                  <i class="fa-solid fa-plus"></i>
-                  <span class="font-medium">Add new product</span>
-                </span>
-                <span class="text-[11px] text-primary-500 dark:text-primary-200">
-                  Ctrl + N
-                </span>
-              </button>
-
-              <button
-                type="button"
-                class="w-full inline-flex items-center justify-between rounded-xl border border-slate-200/80 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/70 px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors"
-              >
-                <span class="flex items-center gap-2">
-                  <i class="fa-solid fa-arrow-trend-up text-emerald-400"></i>
-                  <span class="font-medium text-slate-700 dark:text-slate-100">
-                    View earnings report
-                  </span>
-                </span>
-                <span class="text-[11px] text-slate-400 dark:text-slate-500">
-                  Last 30 days
-                </span>
-              </button>
-
-              <button
-                type="button"
-                class="w-full inline-flex items-center justify-between rounded-xl border border-slate-200/80 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/70 px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors"
-              >
-                <span class="flex items-center gap-2">
-                  <i class="fa-solid fa-gear text-sky-400"></i>
-                  <span class="font-medium text-slate-700 dark:text-slate-100">
-                    Store settings
-                  </span>
-                </span>
-                <span class="text-[11px] text-slate-400 dark:text-slate-500">
-                  Profile · Shipping
-                </span>
-              </button>
-            </div>
-          </div>
-        </section>
-
-
+            <tr v-if="!recentOrders.length">
+              <td colspan="7" class="px-4 py-8 text-center text-slate-500 text-sm">
+                No recent vendor orders found.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </VendorLayout>
-
 </template>
-
-
