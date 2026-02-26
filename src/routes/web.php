@@ -20,44 +20,44 @@ Route::prefix('vendor')->group(function () {
 
 
     Route::prefix('api')->middleware(['auth:vendor'])->group(function () {
-        // catalog
-        Route::get('/catalog/departments', [VendorCatalogController::class, 'departments']);
-        Route::get('/catalog/sub-departments/{departmentId}', [VendorCatalogController::class, 'subDepartments']);
-        Route::get('/catalog/sub-sub-departments/{subDepartmentId}', [VendorCatalogController::class, 'subSubDepartments']);
-        Route::get('/catalog/types', [VendorCatalogController::class, 'types']);
-        Route::get('/catalog/brands', [VendorCatalogController::class, 'brands']);
-        Route::get('/catalog/manufactures', [VendorCatalogController::class, 'manufactures']);
+            // catalog
+            Route::get('/catalog/departments', [VendorCatalogController::class, 'departments']);
+            Route::get('/catalog/sub-departments/{departmentId}', [VendorCatalogController::class, 'subDepartments']);
+            Route::get('/catalog/sub-sub-departments/{subDepartmentId}', [VendorCatalogController::class, 'subSubDepartments']);
+            Route::get('/catalog/types', [VendorCatalogController::class, 'types']);
+            Route::get('/catalog/brands', [VendorCatalogController::class, 'brands']);
+            Route::get('/catalog/manufactures', [VendorCatalogController::class, 'manufactures']);
 
-          // vendor orders (Step 1)
-          Route::get('/orders', [VendorOrdersController::class, 'index']);
-          Route::get('/orders/{id}', [VendorOrdersController::class, 'show']);
-// vendor earnings summary (Step 3)
-Route::get('/earnings/summary', [VendorEarningsController::class, 'summary']);
+            // vendor orders (Step 1)
+            Route::get('/orders', [VendorOrdersController::class, 'index']);
+            Route::get('/orders/{id}', [VendorOrdersController::class, 'show']);
+  
+            Route::get('/earnings/summary', [VendorEarningsController::class, 'summary']);
 
-          Route::get('/payouts', [VendorPayoutsController::class, 'index']);
-
-
-        Route::get(
-            '/specifications/sub-sub-department/{id}',
-            [VendorProductSpecificationController::class, 'bySubSubDepartment']
-        );
-
-        // temp products
-        Route::get('/products-temp/next-id', [VendorTempProductController::class, 'nextId']);
-        Route::post('/products-temp', [VendorTempProductController::class, 'store']);
+                    Route::get('/payouts', [VendorPayoutsController::class, 'index']);
 
 
+                    Route::get(
+                        '/specifications/sub-sub-department/{id}',
+                        [VendorProductSpecificationController::class, 'bySubSubDepartment']
+                    );
+
+                    // temp products
+                    Route::get('/products-temp/next-id', [VendorTempProductController::class, 'nextId']);
+                    Route::post('/products-temp', [VendorTempProductController::class, 'store']);
 
 
-        Route::get('products/pending',  [VendorProductsController::class, 'pending']);
-        Route::get('products/approved', [VendorProductsController::class, 'approved']);
-        Route::get('products/summary',  [VendorProductsController::class, 'summary']);
 
 
-        // ✅ Step 5
-Route::get('products/pending/{id}',  [VendorProductsController::class, 'showPending']);
-Route::get('products/approved/{id}', [VendorProductsController::class, 'showApproved']);
-Route::post('products/approved/{id}/request-update', [VendorProductsController::class, 'requestUpdate']);
+                    Route::get('products/pending',  [VendorProductsController::class, 'pending']);
+                    Route::get('products/approved', [VendorProductsController::class, 'approved']);
+                    Route::get('products/summary',  [VendorProductsController::class, 'summary']);
+
+
+                    // ✅ Step 5
+            Route::get('products/pending/{id}',  [VendorProductsController::class, 'showPending']);
+            Route::get('products/approved/{id}', [VendorProductsController::class, 'showApproved']);
+            Route::post('products/approved/{id}/request-update', [VendorProductsController::class, 'requestUpdate']);
     });
 
     Route::view('/{any}', 'vendor')->where('any', '.*');
