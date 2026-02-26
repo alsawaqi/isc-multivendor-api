@@ -13,6 +13,17 @@
   referrerpolicy="no-referrer"
 />
 
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Vendor portal for ISC Multivendor API">
+    <meta name="author" content="ISC Multivendor API">
+    <meta name="keywords" content="vendor, portal, ISC, multivendor, API">
+    <meta name="robots" content="noindex, nofollow">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="theme-color" content="#ffffff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="icon" href="https://admin.avinaq.com/logo.jpg" type="image/x-icon">
+
     <title>Vendor Portal</title>
     @vite('resources/ts/app.ts')
   </head>
