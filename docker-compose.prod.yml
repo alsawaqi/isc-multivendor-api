@@ -1,77 +1,86 @@
 services:
   laravel-muiltivendor-app:
+    image: multivendor-app:prod
     build:
       context: .
       dockerfile: docker/prod/php/php.dockerfile
+    restart: unless-stopped
     volumes:
-      - ./src:/var/www/html:ro               # Read-only application code
-      - storage-data:/var/www/html/storage   # Writable Laravel storage
-      - cache-data:/var/www/html/bootstrap/cache  # Writable Laravel cache
+      - ./src:/var/www/html:ro
+      - vendor-data:/var/www/html/vendor:ro
+      - storage-data:/var/www/html/storage
+      - cache-data:/var/www/html/bootstrap/cache
     environment:
       APP_ENV: production
-      APP_DEBUG: false
+      APP_DEBUG: "false"
+      LOG_CHANNEL: stderr
     networks:
       - npm_network
 
   nginx:
     image: nginx:1.25-alpine
-    volumes:
-      - ./src:/var/www/html:ro
-      - ./docker/prod/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    restart: unless-stopped
     depends_on:
       - laravel-muiltivendor-app
+    volumes:
+      - ./src/public:/var/www/html/public:ro
+      - storage-data:/var/www/html/storage:ro
+      - ./docker/prod/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - npm_network
 
   composer:
-    image: composer:latest
+    profiles: ["build"]
+    image: composer:2
+    working_dir: /app
     volumes:
-      - ./src:/var/www/html
-    working_dir: /var/www/html
-    command: composer install --no-dev --optimize-autoloader
+      - ./src:/app:ro
+      - vendor-data:/app/vendor
+    command: sh -lc "composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader"
     networks:
       - npm_network
-
 
   node-build:
     profiles: ["build"]
     image: node:20-alpine
-    working_dir: /var/www/html
+    working_dir: /app
+    environment:
+      - npm_config_cache=/tmp/.npm
     volumes:
-      - ./src:/var/www/html
+      - ./src:/app:ro
+      - ./src/public:/app/public
+      - node-modules:/app/node_modules
     command: sh -lc "npm ci && npm run build"
     networks:
       - npm_network
 
-  # ✅ one-off deploy step: migrate + cache
   deploy:
     profiles: ["deploy"]
-    image: laravel-muiltivendor-app-laravel-muiltivendor-app   # uses the built image
-    depends_on:
-      - laravel-muiltivendor-app
-    working_dir: /var/www/html
+    image: multivendor-app:prod
     volumes:
       - ./src:/var/www/html:ro
+      - vendor-data:/var/www/html/vendor:ro
       - storage-data:/var/www/html/storage
       - cache-data:/var/www/html/bootstrap/cache
     entrypoint: ["sh","-lc"]
     command: >
-      "php artisan config:cache &&
-       php artisan route:cache &&
-       php artisan view:cache"
+      php artisan migrate --force &&
+      php artisan config:cache &&
+      php artisan route:cache &&
+      php artisan view:cache
     networks:
-      - npm_network    
+      - npm_network
 
   artisan:
-    build:
-      context: .
-      dockerfile: docker/prod/artisan/artisan.dockerfile
-    volumes:
-      - ./src:/var/www/html
+    profiles: ["deploy"]
+    image: multivendor-app:prod
     working_dir: /var/www/html
+    volumes:
+      - ./src:/var/www/html:ro
+      - vendor-data:/var/www/html/vendor:ro
+      - storage-data:/var/www/html/storage
+      - cache-data:/var/www/html/bootstrap/cache
     command: php artisan migrate --force
-    depends_on:
-      - laravel-muiltivendor-app
     networks:
       - npm_network
 
@@ -82,3 +91,5 @@ networks:
 volumes:
   storage-data:
   cache-data:
+  vendor-data:
+  node-modules:
