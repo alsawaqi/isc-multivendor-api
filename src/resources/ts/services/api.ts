@@ -2,9 +2,11 @@ import axios from 'axios'
 
 const api = axios.create({
   withCredentials: true,
-  headers: { 'X-Requested-With': 'XMLHttpRequest' },
-
-  // IMPORTANT: Laravel’s default CSRF cookie/header names
+  withXSRFToken: true, // ✅ recommended by Sanctum docs
+  headers: {
+    'X-Requested-With': 'XMLHttpRequest',
+    'Accept': 'application/json',
+  },
   xsrfCookieName: 'XSRF-TOKEN',
   xsrfHeaderName: 'X-XSRF-TOKEN',
 })

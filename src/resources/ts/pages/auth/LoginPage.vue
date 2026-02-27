@@ -94,7 +94,7 @@ const handleSubmit = async () => {
             <div
               class="h-9 w-9 rounded-2xl bg-white/10 flex items-center justify-center shadow-md"
             >
-              <span class="text-xl font-semibold tracking-tight">V</span>
+              <span class="text-xl font-semibold tracking-tight">Vsss</span>
             </div>
             <div class="leading-tight">
               <p class="text-sm uppercase tracking-[0.15em] text-white/70">
