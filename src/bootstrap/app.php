@@ -13,11 +13,12 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
 
+        $middleware->statefulApi();
+
         $middleware->alias([
             'vendor.active' => \App\Http\Middleware\EnsureVendorIsActive::class,
         ]);
-
-        $middleware->trustProxies(at: '*');
+ 
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
