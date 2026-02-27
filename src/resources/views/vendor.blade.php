@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8">
      <meta name="csrf-token" content="{{ csrf_token() }}">
-  <title>{{ config('app.name') }}</title>
-  @vite('resources/ts/app.ts')
+      <title>{{ config('app.name') }}</title>
+      @vite('resources/ts/app.ts')
 
     <!-- Font Awesome 6 CDN -->
       <link
