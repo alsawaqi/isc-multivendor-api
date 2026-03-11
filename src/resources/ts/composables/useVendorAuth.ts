@@ -1,33 +1,35 @@
 import { ref, computed } from 'vue'
 import api from '@/services/api'
 
-const user = ref(null)
+const user = ref<any>(null)
 const initialized = ref(false)
 
-let csrfReady: Promise<void> | null = null
+let csrfPromise: Promise<void> | null = null
 async function ensureCsrf() {
-  if (!csrfReady) {
-    csrfReady = api.get('/sanctum/csrf-cookie').then(() => undefined).catch(() => undefined)
+  // Sanctum: initialize CSRF cookie once per page load
+  if (!csrfPromise) {
+    csrfPromise = api.get('/sanctum/csrf-cookie').then(() => undefined)
   }
-  await csrfReady
+  await csrfPromise
 }
 
 export function useVendorAuth() {
   const isAuthed = computed(() => !!user.value)
 
   async function init() {
-    if (initialized.value) return (initialized.value = true)
+    if (initialized.value) return
     initialized.value = true
+
     try {
       const { data } = await api.get('/vendor/auth/me')
-      user.value = data.user
+      user.value = data.user ?? null
     } catch {
       user.value = null
     }
   }
 
   async function login(login: string, password: string, remember = true) {
-    await ensureCsrf()
+    await ensureCsrf() // ✅ required by Sanctum SPA flow
     const { data } = await api.post('/vendor/auth/login', { login, password, remember })
     user.value = data.user
   }
