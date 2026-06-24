@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'vendor.active' => \App\Http\Middleware\EnsureVendorIsActive::class,
+            'vendor.approved' => \App\Http\Middleware\EnsureVendorIsApproved::class,
         ]);
  
     })

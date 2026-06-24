@@ -10,9 +10,17 @@ class Vendor extends Model
     protected $primaryKey = 'id';
 
     // protected $connection = 'sqlsrv';
+    protected $guarded = [];
 
     protected $casts = [
-        'Status' => 'integer',
         'Is_Active' => 'integer',
+        'Onboarding_Completeness' => 'integer',
+        'Approved_At' => 'datetime',
+        'Submitted_For_Approval_At' => 'datetime',
     ];
+
+    public function documents()
+    {
+        return $this->hasMany(VendorDocument::class, 'Vendor_Id', 'id');
+    }
 }

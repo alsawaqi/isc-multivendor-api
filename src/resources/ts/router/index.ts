@@ -11,9 +11,21 @@ const router = createRouter({
       meta: { guestOnly: true },
     },
     {
+      path: '/register',
+      name: 'vendor.register',
+      component: () => import('../pages/auth/RegisterPage.vue'),
+      meta: { guestOnly: true },
+    },
+    {
       path: '/dashboard',
       name: 'vendor.dashboard',
       component: () => import('../pages/dashboard/VendorDashboard.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/profile',
+      name: 'vendor.profile',
+      component: () => import('../pages/dashboard/VendorOnboarding.vue'),
       meta: { requiresAuth: true },
     },
     {
@@ -26,6 +38,12 @@ const router = createRouter({
       path: '/viewproducts',
       name: 'vendor.viewproducts',
       component: () => import('../pages/dashboard/ViewVendorProducts.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/stock',
+      name: 'vendor.stock',
+      component: () => import('../pages/dashboard/VendorStock.vue'),
       meta: { requiresAuth: true },
     },
 
@@ -41,9 +59,27 @@ const router = createRouter({
       component: () => import('../pages/dashboard/VendorPayouts.vue'),
       meta: { requiresAuth: true },
     },
+    {
+      path: '/engagement',
+      name: 'vendor.engagement',
+      component: () => import('../pages/dashboard/VendorEngagement.vue'),
+      meta: { requiresAuth: true },
+    },
 
 
 
+    {
+      path: '/products/temp/:id/edit',
+      name: 'vendor.product.pending.edit',
+      component: () => import('../pages/dashboard/VendorProductTempEdit.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/products/:id/edit',
+      name: 'vendor.product.approved.edit',
+      component: () => import('../pages/dashboard/VendorProductTempEdit.vue'),
+      meta: { requiresAuth: true },
+    },
     {
       path: '/products/temp/:id',
       name: 'vendor.product.pending.show',
@@ -98,6 +134,16 @@ router.beforeEach(async (to) => {
 
   if (to.meta.requiresAuth && !auth.isAuthed.value) {
     return { name: 'vendor.login', query: { redirect: to.fullPath } }
+  }
+
+  // Two-gate flow: until a vendor is APPROVED (gate 2), keep them on the profile
+  // page to complete + submit their details. 'approved' unlocks the dashboard/products.
+  if (to.meta.requiresAuth && auth.isAuthed.value && to.name !== 'vendor.profile') {
+    const u: any = auth.user.value
+    const approved = String(u?.vendor?.Approval_Status || '').toLowerCase() === 'approved'
+    if (!approved) {
+      return { name: 'vendor.profile' }
+    }
   }
 
   if (to.meta.guestOnly && auth.isAuthed.value) {

@@ -49,6 +49,12 @@ type TempRow = {
   Submitted_At?: string
   Reviewed_At?: string
   Rejection_Reason?: string | null
+  approval_sla?: {
+    sla_status?: string
+    sla_due_at?: string | null
+    hours_remaining?: number | null
+    hours_to_review?: number | null
+  }
 
   department?: Rel | null
   subDepartment?: Rel | null
@@ -119,7 +125,9 @@ function resetState() {
 }
 
 function imgUrl(row: { defaultImage?: DefaultImage | null }) {
-  return `${url}/${(row as any).default_image?.Image_Path || row.defaultImage?.image_path || ""}`
+  const path = (row as any).default_image?.Image_Path || row.defaultImage?.Image_Path || row.defaultImage?.image_path || ""
+  if (!path) return ""
+  return `${url}/${String(path).replace(/^\/+/, "")}`
   
 }
 
@@ -146,6 +154,13 @@ function statusBadge(status?: string) {
   return "bg-slate-100 text-slate-700 border-slate-200"
 }
 
+function slaBadge(status?: string) {
+  if (status === "overdue") return "bg-rose-100 text-rose-700 border-rose-200"
+  if (status === "due_soon") return "bg-amber-100 text-amber-700 border-amber-200"
+  if (status === "completed") return "bg-emerald-100 text-emerald-700 border-emerald-200"
+  return "bg-slate-100 text-slate-700 border-slate-200"
+}
+
 async function fetchPending() {
   loading.value = true
   error.value = null
@@ -155,7 +170,7 @@ async function fetchPending() {
         page: page.value,
         per_page: perPage.value,
         search: debouncedSearch.value,
-        status: "all", // change to "pending" if you want pending-only
+        status: "active",
         sortBy: "Submitted_At",
         sortDir: "desc",
       },
@@ -242,7 +257,7 @@ function prevPage() {
                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/60'"
               @click="tab = 'pending'"
             >
-              Pending (Temp) 
+              Review Queue
             </button>
 
             <button
@@ -400,12 +415,24 @@ function prevPage() {
                   </span>
                 </div>
 
+                <div
+                  v-if="tab === 'pending' && (row as any).approval_sla"
+                  class="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px]"
+                >
+                  <span class="px-2 py-1 rounded-full border font-semibold" :class="slaBadge((row as any).approval_sla.sla_status)">
+                    SLA: {{ (row as any).approval_sla.sla_status?.replace('_', ' ') }}
+                  </span>
+                  <span class="text-slate-500">
+                    Due {{ (row as any).approval_sla.sla_due_at || '-' }}
+                  </span>
+                </div>
+
                 <!-- Optional: show review/rejection messages for pending -->
                 <div
-                  v-if="tab === 'pending' && (row as any).Submission_Status === 'rejected'"
+                  v-if="tab === 'pending' && ['rejected', 'needs_changes'].includes((row as any).Submission_Status)"
                   class="mt-3 rounded-xl border border-rose-200/70 bg-rose-50 px-3 py-2 text-[11px] text-rose-700"
                 >
-                  Rejected: {{ (row as any).Rejection_Reason || "-" }}
+                  Admin note: {{ (row as any).Rejection_Reason || "-" }}
                 </div>
 
                 <!-- Actions (placeholder for next blueprint steps: order tracking, etc.) -->

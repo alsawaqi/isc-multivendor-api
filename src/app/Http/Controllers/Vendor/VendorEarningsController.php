@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Vendor;
 use App\Http\Controllers\Controller;
 use App\Models\OrdersPlacedVendor;
 use Carbon\Carbon;
+use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -176,7 +177,7 @@ class VendorEarningsController extends Controller
             })
             ->values();
     
-        // ✅ Most sold product (by total quantity sold)
+        // Most sold products (by total quantity sold)
         $topProductQuery = DB::table('Orders_Placed_Details_T as d')
             ->join('Orders_Placed_Vendors_T as ov', 'ov.id', '=', 'd.Orders_Placed_Vendor_Id')
             ->leftJoin('Products_Master_T as p', 'p.id', '=', 'd.Products_Id')
@@ -190,7 +191,7 @@ class VendorEarningsController extends Controller
             $topProductQuery->where('ov.created_at', '<=', $toDateTime);
         }
     
-        $topProduct = $topProductQuery
+        $topProducts = $topProductQuery
             ->selectRaw("
                 d.Products_Id as product_id,
                 MAX(p.Product_Name) as product_name,
@@ -202,7 +203,57 @@ class VendorEarningsController extends Controller
             ->groupBy('d.Products_Id')
             ->orderByDesc('units_sold')
             ->orderByDesc('sales_total')
-            ->first();
+            ->limit(6)
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'product_id' => (int) $row->product_id,
+                    'product_name' => $row->product_name,
+                    'product_code' => $row->product_code,
+                    'units_sold' => (float) $row->units_sold,
+                    'orders_count' => (int) $row->orders_count,
+                    'sales_total' => round((float) $row->sales_total, 3),
+                ];
+            })
+            ->values();
+
+        $topProduct = $topProducts->first();
+
+        $trendFrom = $fromDateTime
+            ? Carbon::parse($fromDateTime)->startOfDay()
+            : now()->subDays(29)->startOfDay();
+
+        $trendTo = $toDateTime
+            ? Carbon::parse($toDateTime)->endOfDay()
+            : now()->endOfDay();
+
+        if ($trendFrom->gt($trendTo)) {
+            [$trendFrom, $trendTo] = [$trendTo->copy()->startOfDay(), $trendFrom->copy()->endOfDay()];
+        }
+
+        $trendRows = DB::table('Orders_Placed_Vendors_T')
+            ->where('Vendor_Id', $vendorId)
+            ->whereBetween('created_at', [$trendFrom->format('Y-m-d H:i:s'), $trendTo->format('Y-m-d H:i:s')])
+            ->selectRaw('CONVERT(date, created_at) as sales_date')
+            ->selectRaw('SUM(COALESCE(Total, 0)) as sales_total')
+            ->selectRaw('COUNT(*) as orders_count')
+            ->groupBy(DB::raw('CONVERT(date, created_at)'))
+            ->orderBy(DB::raw('CONVERT(date, created_at)'))
+            ->get()
+            ->keyBy(fn ($row) => (string) $row->sales_date);
+
+        $salesTrend = [];
+        foreach (CarbonPeriod::create($trendFrom->copy()->startOfDay(), $trendTo->copy()->startOfDay()) as $date) {
+            $key = $date->toDateString();
+            $row = $trendRows->get($key);
+
+            $salesTrend[] = [
+                'date' => $key,
+                'label' => $date->format('M d'),
+                'sales_total' => round((float) ($row->sales_total ?? 0), 3),
+                'orders_count' => (int) ($row->orders_count ?? 0),
+            ];
+        }
     
         return response()->json([
             'success' => true,
@@ -227,14 +278,9 @@ class VendorEarningsController extends Controller
                 'recent_orders' => $recentOrders,
     
                 // ✅ New dashboard widget payload
-                'top_sold_product' => $topProduct ? [
-                    'product_id'   => (int) $topProduct->product_id,
-                    'product_name' => $topProduct->product_name,
-                    'product_code' => $topProduct->product_code,
-                    'units_sold'   => (float) $topProduct->units_sold,
-                    'orders_count' => (int) $topProduct->orders_count,
-                    'sales_total'  => round((float) $topProduct->sales_total, 3),
-                ] : null,
+                'top_sold_product' => $topProduct ?: null,
+                'top_products' => $topProducts,
+                'sales_trend' => $salesTrend,
     
                 'filters' => [
                     'date_from' => $validated['date_from'] ?? null,

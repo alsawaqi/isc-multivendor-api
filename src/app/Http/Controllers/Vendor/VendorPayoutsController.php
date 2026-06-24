@@ -120,8 +120,8 @@ class VendorPayoutsController extends Controller
 
         // Transform rows for clean UI consumption
         $items = collect($paginator->items())->map(function ($row) {
-            $subTotal = (float) ($row->Sub_Total ?? 0);
-            $commission = (float) ($row->Commission_Amount ?? 0);
+            $subTotal = (float) ($row->Net_Sub_Total ?? $row->Sub_Total ?? 0);
+            $commission = (float) ($row->Adjusted_Commission_Amount ?? $row->Commission_Amount ?? 0);
 
             $calculatedNet = round(max($subTotal - $commission, 0), 3);
             $storedPayout = is_null($row->Payout_Amount) ? null : (float) $row->Payout_Amount;
@@ -135,14 +135,19 @@ class VendorPayoutsController extends Controller
                 'Status' => $row->Status,
                 'Payout_Status' => $row->Payout_Status ?: 'unpaid',
 
-                'Sub_Total' => $subTotal,
+                'Sub_Total' => is_null($row->Sub_Total) ? 0 : (float) $row->Sub_Total,
+                'Refunded_Amount' => is_null($row->Refunded_Amount) ? 0 : (float) $row->Refunded_Amount,
+                'Returned_Quantity' => (int) ($row->Returned_Quantity ?? 0),
+                'Net_Sub_Total' => $subTotal,
                 'Commission_Type' => $row->Commission_Type,
                 'Commission_Value' => is_null($row->Commission_Value) ? null : (float) $row->Commission_Value,
-                'Commission_Amount' => $commission,
+                'Commission_Amount' => is_null($row->Commission_Amount) ? null : (float) $row->Commission_Amount,
+                'Adjusted_Commission_Amount' => $commission,
 
                 // if payout amount not stored yet, return computed net
                 'Payout_Amount' => $storedPayout ?? $calculatedNet,
                 'Expected_Payout_Amount' => $calculatedNet,
+                'Payout_Adjustment_Amount' => is_null($row->Payout_Adjustment_Amount) ? 0 : (float) $row->Payout_Adjustment_Amount,
 
                 'Payout_At' => $row->Payout_At,
                 'Payout_Reference' => $row->Payout_Reference,

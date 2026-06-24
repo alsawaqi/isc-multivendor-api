@@ -14,8 +14,7 @@ class VendorProductSpecificationController extends Controller
         $descriptions = ProductSpecificationDescription::with(['values' => function ($q) {
                 $q->orderBy('value');
             }])
-            ->where('product_sub_sub_department_id', $subSubDeptId) // ✅ correct column
-            ->where('is_active', 1) // optional
+            ->where('product_sub_sub_department_id', $subSubDeptId)
             ->orderBy('sort_order') // optional
             ->get();
 

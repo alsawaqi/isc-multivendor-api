@@ -74,4 +74,14 @@ class ProductMaster extends Model
     {
         return $this->hasMany(ProductsSpecification::class, 'Product_Id');
     }
+
+    public function reviews()
+    {
+        return $this->hasMany(ProductReview::class, 'Products_Id', 'id');
+    }
+
+    public function questions()
+    {
+        return $this->hasMany(ProductQuestion::class, 'Products_Id', 'id');
+    }
 }

@@ -14,11 +14,12 @@ class EnsureVendorIsActive
      *
      * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      */
-    public function handle(Request $request, Closure $next)
+    public function handle(Request $request, Closure $next): Response
     {
         $user = Auth::guard('vendor')->user();
+        $vendor = $user?->vendor;
 
-        if (!$user || !$user->vendor || (int)$user->vendor->Is_Active !== 1) {
+        if (!$user || !$vendor || (int) $vendor->Is_Active !== 1) {
             Auth::guard('vendor')->logout();
             return $request->expectsJson()
                 ? response()->json(['message' => 'Vendor inactive.'], 403)

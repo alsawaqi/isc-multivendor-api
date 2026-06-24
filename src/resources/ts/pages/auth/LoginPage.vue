@@ -136,7 +136,7 @@ const handleSubmit = async () => {
               Vendor Login
             </h1>
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              Use your vendor user account created by the ISC admin.
+              Sign in to your vendor account, or register a new one below.
             </p>
           </div>
 
@@ -243,6 +243,13 @@ const handleSubmit = async () => {
               ></span>
               <span>{{ isSubmitting ? 'Signing in...' : 'Sign in to portal' }}</span>
             </button>
+
+            <p class="text-center text-xs text-slate-500 dark:text-slate-400">
+              New vendor?
+              <RouterLink to="/register" class="text-primary-600 dark:text-primary-400 font-medium hover:underline">
+                Create an account
+              </RouterLink>
+            </p>
           </form>
 
           <div

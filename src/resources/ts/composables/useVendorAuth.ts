@@ -34,11 +34,42 @@ export function useVendorAuth() {
     user.value = data.user
   }
 
+  // Public self-registration. Does NOT sign the vendor in — they must wait for
+  // admin approval before they can log in. Accepts FormData (for document uploads)
+  // or a plain object; axios sets the right Content-Type automatically.
+  async function register(payload: FormData | Record<string, any>) {
+    await ensureCsrf()
+    const { data } = await api.post('/vendor/auth/register', payload)
+    return data
+  }
+
   async function logout() {
     await ensureCsrf()
     await api.post('/vendor/auth/logout')
     user.value = null
   }
 
-  return { user, isAuthed, init, login, logout }
+  // Re-fetch the current user (e.g. after completing the profile so the
+  // profile_complete gate re-evaluates).
+  async function refresh() {
+    try {
+      const { data } = await api.get('/vendor/auth/me')
+      user.value = data.user ?? null
+    } catch {
+      /* keep last known user */
+    }
+    return user.value
+  }
+
+  async function changePassword(payload: {
+    current_password: string
+    password: string
+    password_confirmation: string
+  }) {
+    await ensureCsrf()
+    const { data } = await api.post('/vendor/auth/change-password', payload)
+    return data
+  }
+
+  return { user, isAuthed, init, login, register, logout, refresh, changePassword }
 }

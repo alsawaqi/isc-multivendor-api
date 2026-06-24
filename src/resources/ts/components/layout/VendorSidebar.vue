@@ -30,6 +30,13 @@ const mainItems: MenuItem[] = [
     badge: 'Live',
     to: '/dashboard',
   },
+  {
+    key: 'profile',
+    label: 'Onboarding',
+    icon: 'fa-solid fa-clipboard-check',
+    description: 'Profile & documents',
+    to: '/profile',
+  },
 
 
   {
@@ -45,6 +52,13 @@ const mainItems: MenuItem[] = [
     icon: 'fa-solid fa-money-bill-transfer',
     description: 'Commission & payments',
     to: '/payouts',
+  },
+  {
+    key: 'engagement',
+    label: 'Reviews & Q&A',
+    icon: 'fa-solid fa-comments',
+    description: 'Reply to customers',
+    to: '/engagement',
   },
   // later:
   // {
@@ -79,6 +93,13 @@ const secondaryItems: MenuItem[] = [
     icon: 'fa-solid fa-box-open',
     description: 'Manage catalog',
     to: '/viewproducts',
+  },
+  {
+    key: 'stock',
+    label: 'Stock',
+    icon: 'fa-solid fa-boxes-stacked',
+    description: 'Adjust quantities',
+    to: '/stock',
   },
 
   
