@@ -21,7 +21,7 @@ class VendorProductEngagementController extends Controller
             ->whereHas('product', fn ($product) => $product->where('Vendor_Id', $vendorId))
             ->with([
                 'product:id,Product_Name,Product_Name_Ar,Slug,Vendor_Id',
-                'customer:id,Customer_Full_Name,Company_Name',
+                'customer:id,Customer_Full_Name',
                 'replies' => fn ($reply) => $reply->oldest(),
             ])
             ->latest();
@@ -69,7 +69,7 @@ class VendorProductEngagementController extends Controller
             ->whereHas('product', fn ($product) => $product->where('Vendor_Id', $vendorId))
             ->with([
                 'product:id,Product_Name,Product_Name_Ar,Slug,Vendor_Id',
-                'customer:id,Customer_Full_Name,Company_Name',
+                'customer:id,Customer_Full_Name',
                 'answers' => fn ($answer) => $answer->oldest(),
             ])
             ->latest();
