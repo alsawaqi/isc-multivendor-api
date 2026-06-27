@@ -13,6 +13,11 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
 
+        // Behind Nginx Proxy Manager + Cloudflare: trust forwarded headers so
+        // Laravel detects HTTPS / the real host (needed for secure cookies,
+        // correct URL generation, and CSRF/session handling).
+        $middleware->trustProxies(at: '*');
+
         $middleware->statefulApi();
 
         $middleware->alias([
