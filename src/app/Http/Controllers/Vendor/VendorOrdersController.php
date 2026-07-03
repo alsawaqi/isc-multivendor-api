@@ -119,6 +119,20 @@ class VendorOrdersController extends Controller
             ->where('id', $vendorOrder->Orders_Placed_Id)
             ->first();
 
+        // Pickup-handover columns are admin-only PII (collector identity,
+        // private R2 ID-image key, internal admin user id) — never expose
+        // them to vendors. Null-safe pre-migration: unset() on missing
+        // properties is a no-op for stdClass rows.
+        if ($order) {
+            unset(
+                $order->Pickup_Person_Name,
+                $order->Pickup_Person_Contact,
+                $order->Pickup_Id_Image_Path,
+                $order->Picked_Up_At,
+                $order->Picked_Up_By
+            );
+        }
+
         // Items that belong to this vendor-order
         $items = DB::table('Orders_Placed_Details_T as d')
             ->leftJoin('Products_Master_T as p', 'p.id', '=', 'd.Products_Id')
