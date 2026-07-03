@@ -3,7 +3,9 @@ import { computed, onMounted, reactive, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import VendorLayout from "@/components/layout/VendorLayout.vue"
 import VendorPageHeader from "@/components/layout/VendorPageHeader.vue"
+import BulkPriceEditor from "@/components/products/BulkPriceEditor.vue"
 import api from "@/services/api"
+import { describeRange, tiersFromApi, tiersToPayload, validateTiers, type BulkTier } from "@/services/bulkPricing"
 
 type AnyObj = Record<string, any>
 type SpecEditRow = {
@@ -27,6 +29,7 @@ const detail = ref<{
   product: AnyObj
   images: AnyObj[]
   specs: AnyObj[]
+  bulk_prices?: AnyObj[]
   request_history: AnyObj[]
   can_request_update: boolean
   has_open_update_request: boolean
@@ -40,6 +43,19 @@ const requestValues = reactive<Record<string, any>>({})
 const requestSpecRows = ref<SpecEditRow[]>([])
 const requestSpecsLoading = ref(false)
 const requestSpecsError = ref<string | null>(null)
+const requestBulkTiers = ref<BulkTier[]>([])
+
+// Product price floor (tiers may not price below Minimum_Selling_Price).
+const bulkPriceFloor = computed<number | null>(() => {
+  const raw = detail.value?.product?.Minimum_Selling_Price
+  return raw === null || raw === undefined ? null : Number(raw)
+})
+
+const tierRange = (row: AnyObj): string => {
+  const min = Number(row?.min_qty ?? row?.Min_Qty ?? 0)
+  const maxRaw = row?.max_qty ?? row?.Max_Qty ?? null
+  return describeRange(min, maxRaw === null || maxRaw === "" ? null : Number(maxRaw))
+}
 
 const tempEditModalOpen = ref(false)
 const tempEditError = ref<string | null>(null)
@@ -74,6 +90,7 @@ const requestFields = [
   { key: "Width_Cm", label: "Width (m)", type: "number" },
   { key: "Height_Cm", label: "Height (m)", type: "number" },
   { key: "specifications", label: "Specifications", type: "specifications" },
+  { key: "bulk_prices", label: "Bulk Prices", type: "bulk_prices" },
 ] as const
 
 const source = computed<"pending" | "approved">(() => {
@@ -165,6 +182,7 @@ const openRequestModal = async () => {
   for (const field of requestFields) {
     requestValues[field.key] = p[field.key] ?? ""
   }
+  requestBulkTiers.value = tiersFromApi(detail.value?.bulk_prices)
   requestComment.value = ""
   requestError.value = null
   requestModalOpen.value = true
@@ -178,6 +196,7 @@ const closeRequestModal = () => {
   selectedRequestKeys.value = []
   requestSpecRows.value = []
   requestSpecsError.value = null
+  requestBulkTiers.value = []
 }
 
 const submitRequest = async () => {
@@ -198,6 +217,17 @@ const submitRequest = async () => {
         return
       }
       changes.specifications = specs
+      continue
+    }
+
+    if (key === "bulk_prices") {
+      const tierErrors = validateTiers(requestBulkTiers.value, bulkPriceFloor.value)
+      if (tierErrors.length > 0) {
+        requestError.value = tierErrors.join(" ")
+        return
+      }
+      // Empty set = ask admin to clear every tier.
+      changes.bulk_prices = tiersToPayload(requestBulkTiers.value)
       continue
     }
 
@@ -600,6 +630,25 @@ watch(() => route.fullPath, fetchDetail)
                 <span class="text-sm text-slate-500 dark:text-slate-400">Volume (cbm)</span>
                 <span class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ detail.product?.Volume_Cbm ?? "-" }}</span>
               </div>
+
+              <!-- Quantity-tier bulk prices (read-only) -->
+              <div v-if="detail.bulk_prices?.length" class="py-2 border-t border-slate-100 dark:border-slate-800">
+                <p class="text-sm text-slate-500 dark:text-slate-400 mb-2">
+                  {{ detail.mode === "pending" ? "Bulk prices requested" : "Bulk prices" }}
+                </p>
+                <div class="space-y-1">
+                  <div
+                    v-for="tier in detail.bulk_prices"
+                    :key="tier.id ?? tierRange(tier)"
+                    class="flex items-center justify-between rounded-lg bg-slate-50/70 dark:bg-slate-900/40 px-2 py-1.5"
+                  >
+                    <span class="text-sm text-slate-600 dark:text-slate-300">Qty {{ tierRange(tier) }}</span>
+                    <span class="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      {{ money(tier.unit_price ?? tier.Unit_Price) }}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -744,6 +793,19 @@ watch(() => route.fullPath, fetchDetail)
                       {{ spec.description }}: {{ spec.value }}
                     </span>
                   </div>
+                  <div
+                    v-if="item.Requested_Bulk_Prices_Display?.length"
+                    class="mt-2 flex flex-wrap items-center gap-2"
+                  >
+                    <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Bulk prices requested:</span>
+                    <span
+                      v-for="tier in item.Requested_Bulk_Prices_Display"
+                      :key="`${item.id}-bp-${tier.range}`"
+                      class="px-2 py-1 rounded-lg border border-emerald-200 bg-emerald-50 text-[11px] font-semibold text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300"
+                    >
+                      {{ tier.range }} @ {{ tier.unit_price }}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -798,7 +860,7 @@ watch(() => route.fullPath, fetchDetail)
             <div
               v-for="key in selectedRequestKeys"
               :key="key"
-              :class="['textarea', 'specifications'].includes(String(requestFields.find(f => f.key === key)?.type || '')) ? 'sm:col-span-2' : ''"
+              :class="['textarea', 'specifications', 'bulk_prices'].includes(String(requestFields.find(f => f.key === key)?.type || '')) ? 'sm:col-span-2' : ''"
             >
               <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
                 {{ requestFields.find(f => f.key === key)?.label || key }}
@@ -833,6 +895,12 @@ watch(() => route.fullPath, fetchDetail)
                     </select>
                   </div>
                 </div>
+              </div>
+              <div
+                v-else-if="requestFields.find(f => f.key === key)?.type === 'bulk_prices'"
+                class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3"
+              >
+                <BulkPriceEditor v-model:tiers="requestBulkTiers" :floor="bulkPriceFloor" />
               </div>
               <textarea
                 v-else-if="requestFields.find(f => f.key === key)?.type === 'textarea'"

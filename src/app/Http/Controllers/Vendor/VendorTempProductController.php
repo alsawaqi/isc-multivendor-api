@@ -9,13 +9,17 @@ use App\Models\ProductTemporaryImage;
 
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Sentry\State\HubInterface;
 use App\Helpers\CodeGenerator;
 use App\Models\ProductVendorRequest;
 use App\Models\ProductSpecification;
 use App\Models\ProductSpecificationDescription;
 use App\Models\ProductSpecificationValue;
+use App\Models\ProductTemporaryBulkPrice;
+use App\Support\Pricing\BulkPriceRules;
 
 class VendorTempProductController extends Controller
 {
@@ -116,6 +120,55 @@ class VendorTempProductController extends Controller
         }
     }
 
+    /**
+     * Validate an optional 'bulk_prices' payload against the smart tier rules.
+     *
+     * Returns null when the request does not carry the key (= no tier change),
+     * otherwise the normalized replace-set (possibly empty = clear all tiers).
+     * A non-array value (e.g. an empty multipart marker) means "clear all".
+     * Throws a 422 ValidationException on rule violations.
+     */
+    private function validateBulkPricePayload(Request $request, ?float $floor): ?array
+    {
+        if (!$request->has('bulk_prices')) {
+            return null;
+        }
+
+        $raw = $request->input('bulk_prices', []);
+        $tiers = is_array($raw) ? $raw : [];
+
+        $errors = BulkPriceRules::validateSet($tiers, $floor);
+
+        if (!empty($errors)) {
+            throw ValidationException::withMessages(['bulk_prices' => $errors]);
+        }
+
+        return BulkPriceRules::normalizeSet($tiers);
+    }
+
+    /**
+     * Replace-set sync of a temp product's bulk price tiers.
+     * No-op while the isc-admin-api migration has not created the table yet.
+     */
+    private function syncTemporaryBulkPrices(ProductTemporary $product, array $tiers, int $userId): void
+    {
+        if (!Schema::hasTable('Products_Temporary_Bulk_Prices_T')) {
+            return;
+        }
+
+        ProductTemporaryBulkPrice::where('Products_Temporary_Id', $product->id)->delete();
+
+        foreach ($tiers as $tier) {
+            ProductTemporaryBulkPrice::create([
+                'Products_Temporary_Id' => $product->id,
+                'Min_Qty' => $tier['min_qty'],
+                'Max_Qty' => $tier['max_qty'],
+                'Unit_Price' => $tier['unit_price'],
+                'Created_By' => $userId,
+            ]);
+        }
+    }
+
     public function nextId()
     {
         $max = (int) ProductTemporary::max('id');
@@ -156,12 +209,23 @@ class VendorTempProductController extends Controller
             'specs' => ['nullable', 'array'],
             'specs.*.description_id' => ['nullable', 'integer'],
             'specs.*.value_id' => ['nullable', 'integer'],
+
+            // Optional quantity-tier bulk prices (smart rules run below).
+            'bulk_prices' => ['nullable', 'array'],
+            'bulk_prices.*.min_qty' => ['nullable', 'integer'],
+            'bulk_prices.*.max_qty' => ['nullable', 'integer'],
+            'bulk_prices.*.unit_price' => ['nullable', 'numeric'],
         ]);
-    
+
+        // Smart tier validation (overlaps, bounds, price > 0). Runs BEFORE the
+        // try/catch so a rule violation surfaces as 422, not the generic 500.
+        // New temp products have no Minimum_Selling_Price yet -> floor is null.
+        $bulkPrices = $this->validateBulkPricePayload($request, null);
+
         try {
             $tempProduct = null;
     
-            DB::transaction(function () use ($request, &$tempProduct) {
+            DB::transaction(function () use ($request, $bulkPrices, &$tempProduct) {
                 $user = $this->vendorUser();
     
                 // IMPORTANT: adjust these to your vendor user table structure
@@ -248,7 +312,11 @@ class VendorTempProductController extends Controller
                 );
                 $this->syncTemporarySpecifications($tempProduct, $specs, $user->id);
 
-    
+                if ($bulkPrices !== null) {
+                    $this->syncTemporaryBulkPrices($tempProduct, $bulkPrices, $user->id);
+                }
+
+
                 /*
                  * 🔹 NEW: create first timeline entry in Products_Vendor_Requests_T
                  * This records that the vendor submitted this product and it is now "pending".
@@ -268,8 +336,13 @@ class VendorTempProductController extends Controller
                 ]);
             });
     
+            $relations = ['images', 'defaultImage'];
+            if (Schema::hasTable('Products_Temporary_Bulk_Prices_T')) {
+                $relations[] = 'bulkPrices';
+            }
+
             return response()->json([
-                'data' => $tempProduct->load('images', 'defaultImage'),
+                'data' => $tempProduct->load($relations),
             ], 201);
         } catch (\Throwable $e) {
             // app(HubInterface::class)->captureException($e);
@@ -309,6 +382,10 @@ class VendorTempProductController extends Controller
             'default_image_id' => ['nullable', 'integer'],
             'file' => ['nullable'],
             'file.*' => ['image', 'max:10240'],
+            'bulk_prices' => ['nullable', 'array'],
+            'bulk_prices.*.min_qty' => ['nullable', 'integer'],
+            'bulk_prices.*.max_qty' => ['nullable', 'integer'],
+            'bulk_prices.*.unit_price' => ['nullable', 'numeric'],
         ]);
 
         $user = $this->vendorUser();
@@ -343,7 +420,15 @@ class VendorTempProductController extends Controller
             )
             : null;
 
-        DB::transaction(function () use ($request, $product, $validated, $dimensions, $departmentId, $subDepartmentId, $subSubDepartmentId, $typeId, $brandId, $manufactureId, $specs, $user, $vendorId) {
+        // Smart tier validation. Temps normally have a NULL floor, but when an
+        // admin already set Minimum_Selling_Price on this temp row, enforce it.
+        $floor = Schema::hasColumn('Products_Temporary_T', 'Minimum_Selling_Price')
+            && $product->Minimum_Selling_Price !== null
+                ? (float) $product->Minimum_Selling_Price
+                : null;
+        $bulkPrices = $this->validateBulkPricePayload($request, $floor);
+
+        DB::transaction(function () use ($request, $product, $validated, $dimensions, $departmentId, $subDepartmentId, $subSubDepartmentId, $typeId, $brandId, $manufactureId, $specs, $bulkPrices, $user, $vendorId) {
             $productData = [
                 'Product_Department_Id' => $departmentId,
                 'Product_Sub_Department_Id' => $subDepartmentId,
@@ -378,6 +463,10 @@ class VendorTempProductController extends Controller
 
             if ($specs !== null) {
                 $this->syncTemporarySpecifications($product, $specs, $user->id);
+            }
+
+            if ($bulkPrices !== null) {
+                $this->syncTemporaryBulkPrices($product, $bulkPrices, $user->id);
             }
 
             $removeImageIds = collect($request->input('remove_image_ids', []))
@@ -470,9 +559,14 @@ class VendorTempProductController extends Controller
             ]);
         });
 
+        $relations = ['images', 'defaultImage'];
+        if (Schema::hasTable('Products_Temporary_Bulk_Prices_T')) {
+            $relations[] = 'bulkPrices';
+        }
+
         return response()->json([
             'message' => 'Product changes submitted for admin review.',
-            'data' => $product->fresh(['images', 'defaultImage']),
+            'data' => $product->fresh($relations),
         ]);
     }
     

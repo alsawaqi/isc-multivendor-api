@@ -90,4 +90,15 @@ class ProductMaster extends Model
     {
         return $this->hasMany(ProductQuestion::class, 'Products_Id', 'id');
     }
+
+    /**
+     * Quantity-tier bulk prices for this product, ordered by Min_Qty.
+     * Table lives in the isc-admin-api bulk-pricing migration — guard
+     * eager loads with Schema::hasTable('Products_Bulk_Prices_T').
+     */
+    public function bulkPrices()
+    {
+        return $this->hasMany(ProductBulkPrice::class, 'Products_Id', 'id')
+            ->orderBy('Min_Qty');
+    }
 }

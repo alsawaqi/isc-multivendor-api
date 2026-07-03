@@ -138,4 +138,15 @@ class ProductTemporary extends Model
       {
           return $this->hasMany(ProductSpecificationTemp::class, 'Product_Temporary_Id');
       }
+
+      /**
+       * Quantity-tier bulk prices submitted with this temp product,
+       * ordered by Min_Qty. Table lives in the isc-admin-api migration —
+       * guard eager loads with Schema::hasTable('Products_Temporary_Bulk_Prices_T').
+       */
+      public function bulkPrices()
+      {
+          return $this->hasMany(ProductTemporaryBulkPrice::class, 'Products_Temporary_Id', 'id')
+              ->orderBy('Min_Qty');
+      }
 }

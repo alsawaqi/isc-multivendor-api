@@ -3,7 +3,9 @@
   import { useRouter } from "vue-router"
   import VendorLayout from "@/components/layout/VendorLayout.vue"
   import VendorPageHeader from "@/components/layout/VendorPageHeader.vue"
+  import BulkPriceEditor from "@/components/products/BulkPriceEditor.vue"
   import api from "@/services/api"
+  import { describeRange, tiersToPayload, validateTiers, type BulkTier } from "@/services/bulkPricing"
 
   type Opt = { id: number; name: string; name_ar?: string }
 
@@ -41,6 +43,10 @@ type SpecRow = {
 const specRows = ref<SpecRow[]>([])
 const specsLoading = ref(false)
 const specsError = ref<string | null>(null)
+
+// Optional quantity-tier bulk prices (new products have no floor yet).
+const bulkTiers = ref<BulkTier[]>([])
+const bulkTierErrors = computed(() => validateTiers(bulkTiers.value, null))
 
 
   const form = reactive({
@@ -90,7 +96,8 @@ const specsError = ref<string | null>(null)
       form.name_ar.trim().length > 1 &&
       form.description.trim().length > 3 &&
       form.price > 0 &&
-      form.stock >= 0
+      form.stock >= 0 &&
+      bulkTierErrors.value.length === 0
     )
   })
 
@@ -229,6 +236,14 @@ function goPrev() {
     { k: "Name", v: form.name },
     { k: "Arabic Name", v: form.name_ar },
     { k: "Price", v: String(form.price) },
+    {
+      k: "Bulk Prices",
+      v: bulkTiers.value.length
+        ? bulkTiers.value
+            .map(t => `${describeRange(Number(t.min_qty || 0), t.max_qty)} @ ${Number(t.unit_price || 0).toFixed(3)}`)
+            .join(", ")
+        : "-",
+    },
     { k: "Stock", v: String(form.stock) },
     { k: "Weight (Kg)", v: String(form.Weight_Kg) },
     { k: "Dimensions", v: `${form.Length_Cm} × ${form.Width_Cm} × ${form.Height_Cm} (${form.volume_type})` },
@@ -280,6 +295,15 @@ function goPrev() {
         fd.append(`specs[${index}][value_id]`, String(spec.value_id))
       })
 
+      // 🔹 Optional bulk price tiers (omit the key entirely when none).
+      tiersToPayload(bulkTiers.value).forEach((tier, index) => {
+        fd.append(`bulk_prices[${index}][min_qty]`, String(tier.min_qty))
+        if (tier.max_qty !== null) {
+          fd.append(`bulk_prices[${index}][max_qty]`, String(tier.max_qty))
+        }
+        fd.append(`bulk_prices[${index}][unit_price]`, String(tier.unit_price))
+      })
+
       uploadedImages.value.forEach((f) => fd.append("file[]", f))
 
       const res = await api.post("/vendor/api/products-temp", fd, {
@@ -310,6 +334,8 @@ function goPrev() {
         form.stock = 0
 
         form.volume_type = "cm"
+
+      bulkTiers.value = []
 
       step.value = 1
 
@@ -536,6 +562,11 @@ function goPrev() {
                   <div class="sm:col-span-2">
                     <label class="text-xs font-semibold text-slate-600 dark:text-slate-300">Inhouse Barcode (auto)</label>
                     <input :value="inhouseBarcode" disabled readonly class="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-sm opacity-80" />
+                  </div>
+
+                  <!-- Optional quantity-tier bulk prices -->
+                  <div class="sm:col-span-2 rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 p-4">
+                    <BulkPriceEditor v-model:tiers="bulkTiers" :floor="null" />
                   </div>
 
                   <div class="sm:col-span-2">

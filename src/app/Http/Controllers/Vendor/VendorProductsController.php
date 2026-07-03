@@ -11,7 +11,9 @@ use App\Models\ProductSpecificationValue;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use App\Support\Pricing\BulkPriceRules;
 use App\Support\Vendors\VendorApprovalSla;
 
 class VendorProductsController extends Controller
@@ -56,6 +58,9 @@ class VendorProductsController extends Controller
                 $qq->where('Submission_Status', $status);
             })
             ->with(['defaultImage','department','subDepartment','subSubDepartment','brand','manufacture','type','specs'])
+            ->when(Schema::hasTable('Products_Temporary_Bulk_Prices_T'), function ($qq) {
+                $qq->with('bulkPrices');
+            })
             ->when($search !== '', function ($qq) use ($search) {
                 $qq->where(function ($w) use ($search) {
                     $w->where('Product_Name', 'like', "%{$search}%")
@@ -184,6 +189,7 @@ class VendorProductsController extends Controller
                 'product' => $product,
                 'images' => $images,
                 'specs' => $specs,
+                'bulk_prices' => $this->loadBulkPrices('Products_Temporary_Bulk_Prices_T', 'Products_Temporary_Id', (int) $product->id),
                 'request_history' => $history,
                 'can_request_update' => false,
                 'has_open_update_request' => false,
@@ -237,11 +243,36 @@ class VendorProductsController extends Controller
                 'product' => $product,
                 'images' => $images,
                 'specs' => $specs,
+                'bulk_prices' => $this->loadBulkPrices('Products_Bulk_Prices_T', 'Products_Id', (int) $product->id),
                 'request_history' => $history,
                 'can_request_update' => true,
                 'has_open_update_request' => $hasOpenUpdateRequest,
             ],
         ]);
+    }
+
+    /**
+     * Ordered bulk price tiers for a product row; empty until the
+     * isc-admin-api bulk-pricing migration has created the tables.
+     */
+    private function loadBulkPrices(string $table, string $fkColumn, int $fkValue): array
+    {
+        if (!Schema::hasTable($table)) {
+            return [];
+        }
+
+        return DB::table($table)
+            ->where($fkColumn, $fkValue)
+            ->orderBy('Min_Qty')
+            ->get(['id', 'Min_Qty', 'Max_Qty', 'Unit_Price'])
+            ->map(fn ($row) => [
+                'id' => (int) $row->id,
+                'min_qty' => (int) $row->Min_Qty,
+                'max_qty' => $row->Max_Qty === null ? null : (int) $row->Max_Qty,
+                'unit_price' => round((float) $row->Unit_Price, 3),
+            ])
+            ->values()
+            ->all();
     }
 
     /**
@@ -287,6 +318,10 @@ class VendorProductsController extends Controller
                 'changes.specifications.*.value_id' => ['nullable', 'integer'],
                 'changes.specifications.*.product_specification_description_id' => ['nullable', 'integer'],
                 'changes.specifications.*.product_specification_value_id' => ['nullable', 'integer'],
+                'changes.bulk_prices' => ['sometimes', 'array'],
+                'changes.bulk_prices.*.min_qty' => ['nullable', 'integer'],
+                'changes.bulk_prices.*.max_qty' => ['nullable', 'integer'],
+                'changes.bulk_prices.*.unit_price' => ['nullable', 'numeric'],
             ]);
         } else {
             $validated = $request->validate([
@@ -316,6 +351,10 @@ class VendorProductsController extends Controller
                 'remove_image_ids.*' => ['integer'],
                 'file' => ['nullable'],
                 'file.*' => ['image', 'max:10240'],
+                'bulk_prices' => ['nullable', 'array'],
+                'bulk_prices.*.min_qty' => ['nullable', 'integer'],
+                'bulk_prices.*.max_qty' => ['nullable', 'integer'],
+                'bulk_prices.*.unit_price' => ['nullable', 'numeric'],
             ]);
         }
 
@@ -406,6 +445,38 @@ class VendorProductsController extends Controller
             if (!empty($imageUpdates['remove_image_ids']) || !empty($imageUpdates['new_images'])) {
                 $changes['image_updates'] = $imageUpdates;
             }
+        }
+
+        // Optional 'bulk_prices' key: quantity-tier replace-set the vendor wants
+        // on the live product. Admin approval applies it (isc-admin-api
+        // applyProductUpdateRequest). Validated here against the smart tier
+        // rules AND the product's Minimum_Selling_Price floor. An empty array
+        // means "clear all tiers"; a missing key means "no tier change".
+        $rawBulkPrices = null;
+        if ($usesStructuredChanges && array_key_exists('bulk_prices', $rawChanges)) {
+            $rawBulkPrices = is_array($rawChanges['bulk_prices']) ? $rawChanges['bulk_prices'] : [];
+        } elseif (!$usesStructuredChanges && $request->has('bulk_prices')) {
+            $raw = $request->input('bulk_prices', []);
+            $rawBulkPrices = is_array($raw) ? $raw : [];
+        }
+
+        if ($rawBulkPrices !== null) {
+            $floor = Schema::hasColumn('Products_Master_T', 'Minimum_Selling_Price')
+                && $product->Minimum_Selling_Price !== null
+                    ? (float) $product->Minimum_Selling_Price
+                    : null;
+
+            $bulkErrors = BulkPriceRules::validateSet($rawBulkPrices, $floor);
+
+            if (!empty($bulkErrors)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid bulk prices: ' . implode(' ', $bulkErrors),
+                    'errors' => ['bulk_prices' => $bulkErrors],
+                ], 422);
+            }
+
+            $changes['bulk_prices'] = BulkPriceRules::normalizeSet($rawBulkPrices);
         }
 
         if (empty($changes)) {
@@ -631,12 +702,32 @@ class VendorProductsController extends Controller
                 'Requested_Specifications_Display' => is_array($changes) && !empty($changes['specifications'])
                     ? $this->describeSpecificationChanges((array) $changes['specifications'])
                     : [],
+                'Requested_Bulk_Prices_Display' => is_array($changes) && array_key_exists('bulk_prices', $changes)
+                    ? $this->describeBulkPriceChanges((array) $changes['bulk_prices'])
+                    : [],
                 'Action_By_User_Id' => $row->Action_By_User_Id ?? null,
                 'Action_By_Role' => $row->Action_By_Role ?? null,
                 'Action_At' => $row->Action_At ?? null,
                 'created_at' => $row->created_at ?? null,
             ];
         })->values()->all();
+    }
+
+    /**
+     * Human-readable rows for a requested bulk-price tier set, e.g.
+     * [{range: "5-10", unit_price: "6.000"}, {range: "51+", unit_price: "5.000"}].
+     */
+    private function describeBulkPriceChanges(array $tiers): array
+    {
+        return collect(BulkPriceRules::normalizeSet($tiers))
+            ->map(fn (array $tier) => [
+                'min_qty' => $tier['min_qty'],
+                'max_qty' => $tier['max_qty'],
+                'range' => BulkPriceRules::describeRange($tier['min_qty'], $tier['max_qty']),
+                'unit_price' => number_format($tier['unit_price'], 3, '.', ''),
+            ])
+            ->values()
+            ->all();
     }
 
     private function describeSpecificationChanges(array $specs): array

@@ -3,7 +3,9 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import VendorLayout from "@/components/layout/VendorLayout.vue"
 import VendorPageHeader from "@/components/layout/VendorPageHeader.vue"
+import BulkPriceEditor from "@/components/products/BulkPriceEditor.vue"
 import api from "@/services/api"
+import { describeRange, tiersEqual, tiersFromApi, tiersToPayload, validateTiers, type BulkTier } from "@/services/bulkPricing"
 
 type Opt = { id: number; name: string; name_ar?: string }
 type AnyObj = Record<string, any>
@@ -45,6 +47,13 @@ const defaultImageId = ref<number | null>(null)
 const uploadedImages = ref<File[]>([])
 const previewUrls = ref<string[]>([])
 const note = ref("")
+
+// Quantity-tier bulk prices (replace-set). Snapshot the loaded tiers so the
+// approved-update path only submits a bulk_prices change when they changed.
+const bulkTiers = ref<BulkTier[]>([])
+const initialBulkTiers = ref<BulkTier[]>([])
+const priceFloor = ref<number | null>(null)
+const bulkTierErrors = computed(() => validateTiers(bulkTiers.value, priceFloor.value))
 
 const form = reactive({
   product_department_id: 0,
@@ -107,7 +116,8 @@ const step1Valid = computed(() => {
     form.name_ar.trim().length > 1 &&
     form.description.trim().length > 3 &&
     Number(form.price) > 0 &&
-    Number(form.stock) >= 0
+    Number(form.stock) >= 0 &&
+    bulkTierErrors.value.length === 0
   )
 })
 
@@ -239,6 +249,11 @@ async function loadProduct() {
     defaultImageId.value = isApprovedUpdate.value
       ? null
       : (Number(existingImages.value.find((img) => Number(img.Is_Default) === 1)?.id || existingImages.value[0]?.id || 0) || null)
+
+    bulkTiers.value = tiersFromApi(detail.bulk_prices)
+    initialBulkTiers.value = tiersFromApi(detail.bulk_prices)
+    priceFloor.value = p.Minimum_Selling_Price != null ? Number(p.Minimum_Selling_Price) : null
+
     await loadSpecifications(currentSpecMap(detail.specs || []))
   } catch (e: any) {
     error.value = e?.response?.data?.message || "Failed to load product for editing."
@@ -298,6 +313,14 @@ const reviewRows = computed(() => [
   { k: "Manufacture", v: manufactures.value.find((m) => m.id === form.product_manufacture_id)?.name ?? "-" },
   { k: "Name", v: form.name || "-" },
   { k: "Price", v: Number(form.price || 0).toFixed(3) },
+  {
+    k: "Bulk Prices",
+    v: bulkTiers.value.length
+      ? bulkTiers.value
+          .map((t) => `${describeRange(Number(t.min_qty || 0), t.max_qty)} @ ${Number(t.unit_price || 0).toFixed(3)}`)
+          .join(", ")
+      : "-",
+  },
   { k: "Stock", v: String(form.stock) },
   { k: "Weight (kg)", v: String(form.Weight_Kg) },
   { k: `Dimensions (${dimensionUnitLabel.value})`, v: `${form.Length_Cm} x ${form.Width_Cm} x ${form.Height_Cm}` },
@@ -334,6 +357,28 @@ async function submit() {
         fd.append(`specs[${index}][description_id]`, String(row.descriptionId))
         fd.append(`specs[${index}][value_id]`, String(row.selectedValueId))
       })
+
+    // Bulk price tiers (replace-set). Pending resubmits always send the
+    // current state; approved-update requests only when tiers changed.
+    // An empty "bulk_prices" marker tells the API to clear every tier.
+    const bulkChanged = !tiersEqual(bulkTiers.value, initialBulkTiers.value)
+    const shouldSendBulk = isApprovedUpdate.value
+      ? bulkChanged
+      : bulkTiers.value.length > 0 || initialBulkTiers.value.length > 0
+    if (shouldSendBulk) {
+      const tierPayload = tiersToPayload(bulkTiers.value)
+      if (tierPayload.length === 0) {
+        fd.append("bulk_prices", "")
+      } else {
+        tierPayload.forEach((tier, index) => {
+          fd.append(`bulk_prices[${index}][min_qty]`, String(tier.min_qty))
+          if (tier.max_qty !== null) {
+            fd.append(`bulk_prices[${index}][max_qty]`, String(tier.max_qty))
+          }
+          fd.append(`bulk_prices[${index}][unit_price]`, String(tier.unit_price))
+        })
+      }
+    }
 
     removeImageIds.value.forEach((id, index) => {
       fd.append(`remove_image_ids[${index}]`, String(id))
@@ -567,6 +612,11 @@ onBeforeUnmount(() => {
                 <div>
                   <label class="text-xs font-semibold text-slate-600 dark:text-slate-300">Height</label>
                   <input v-model.number="form.Height_Cm" type="number" min="0" step="0.001" class="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm" />
+                </div>
+
+                <!-- Quantity-tier bulk prices (replace-set) -->
+                <div class="sm:col-span-2 rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 p-4">
+                  <BulkPriceEditor v-model:tiers="bulkTiers" :floor="priceFloor" />
                 </div>
               </div>
             </section>
