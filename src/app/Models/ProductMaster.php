@@ -3,11 +3,17 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ProductMaster extends Model
 {
-    //
-    
+    // Soft deletes: Products_Master_T.deleted_at is added by the isc-admin-api
+    // migration (add product cost / min selling / Is_Active / deleted_at).
+    // That migration MUST run before this code goes live, or every query
+    // on this model will fail with an invalid-column error.
+    use SoftDeletes;
+
+
     protected $table = 'Products_Master_T';
 
     protected $primaryKey = 'id';
