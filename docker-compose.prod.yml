@@ -14,6 +14,9 @@ services:
       APP_ENV: production
       APP_DEBUG: "false"
       LOG_CHANNEL: stderr
+      FILESYSTEM_DISK: uploads
+      UPLOADS_ROOT: /var/www/html/storage/app/public
+      PRIVATE_UPLOADS_ROOT: /var/www/html/storage/app/private
     networks:
       - proxy_network
 
@@ -85,6 +88,10 @@ services:
       - storage-data:/var/www/html/storage
       - cache-data:/var/www/html/bootstrap/cache
     command: php artisan migrate --force
+    environment:
+      FILESYSTEM_DISK: uploads
+      UPLOADS_ROOT: /var/www/html/storage/app/public
+      PRIVATE_UPLOADS_ROOT: /var/www/html/storage/app/private
     networks:
       - proxy_network
 
