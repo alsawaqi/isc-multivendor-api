@@ -283,11 +283,11 @@ class VendorTempProductController extends Controller
                     $isFirst = true;
     
                     foreach ($request->file('file') as $file) {
-                        // keep same disk logic you use in admin (r2)
-                        $path = Storage::disk('r2')->putFile('ProductsTemporary', $file); // no 'public'
+                        // keep same disk logic you use in admin (uploads)
+                        $path = Storage::disk('uploads')->putFile('ProductsTemporary', $file); // no 'public'
     
                         if (!$path) {
-                            throw new \RuntimeException('R2 upload failed: putFile returned false');
+                            throw new \RuntimeException('Local upload failed: putFile returned false');
                         }
     
                         ProductTemporaryImage::create([
@@ -482,7 +482,7 @@ class VendorTempProductController extends Controller
 
                 foreach ($imagesToRemove as $image) {
                     if ($image->Image_Path) {
-                        Storage::disk('r2')->delete($image->Image_Path);
+                        Storage::disk('uploads')->delete($image->Image_Path);
                     }
                     $image->delete();
                 }
@@ -514,10 +514,10 @@ class VendorTempProductController extends Controller
 
             if ($request->hasFile('file')) {
                 foreach ($request->file('file') as $file) {
-                    $path = Storage::disk('r2')->putFile('ProductsTemporary', $file);
+                    $path = Storage::disk('uploads')->putFile('ProductsTemporary', $file);
 
                     if (!$path) {
-                        throw new \RuntimeException('R2 upload failed: putFile returned false');
+                        throw new \RuntimeException('Local upload failed: putFile returned false');
                     }
 
                     ProductTemporaryImage::create([

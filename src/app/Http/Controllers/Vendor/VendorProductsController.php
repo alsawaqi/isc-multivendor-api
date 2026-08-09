@@ -559,10 +559,10 @@ class VendorProductsController extends Controller
 
         if ($request->hasFile('file')) {
             foreach ($request->file('file') as $file) {
-                $path = Storage::disk('r2')->putFile('ProductsUpdateRequests', $file);
+                $path = Storage::disk('uploads')->putFile('ProductsUpdateRequests', $file);
 
                 if (!$path) {
-                    throw new \RuntimeException('R2 upload failed: putFile returned false');
+                    throw new \RuntimeException('Local upload failed: putFile returned false');
                 }
 
                 $newImages[] = [

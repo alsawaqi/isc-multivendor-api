@@ -37,7 +37,7 @@ class VendorRegistrationTest extends FeatureTestCase
 
     public function test_registration_stores_uploaded_documents(): void
     {
-        Storage::fake('r2');
+        Storage::fake('private_uploads');
 
         $email = 'regdoc_' . uniqid() . '@example.com';
 

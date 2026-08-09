@@ -193,7 +193,7 @@ class VendorAuthController extends Controller
 
     /**
      * Store any uploaded registration documents (CR, Chamber of Commerce, Activity
-     * License, Rent Contract) to R2 and record them in Vendor_Documents_T as pending.
+     * License, Rent Contract) to local upload storage and record them in Vendor_Documents_T as pending.
      */
     private function storeRegistrationDocuments(Request $request, Vendor $vendor, ?VendorUser $user): void
     {
@@ -209,7 +209,7 @@ class VendorAuthController extends Controller
             $file = $request->file($field);
 
             try {
-                $path = Storage::disk('r2')->putFile("VendorDocuments/{$vendor->id}", $file);
+                $path = Storage::disk('private_uploads')->putFile("VendorDocuments/{$vendor->id}", $file);
 
                 VendorDocument::create([
                     'Vendor_Id'                  => $vendor->id,

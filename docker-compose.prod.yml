@@ -63,6 +63,10 @@ services:
       - storage-data:/var/www/html/storage
       - cache-data:/var/www/html/bootstrap/cache
     entrypoint: ["sh","-lc"]
+    environment:
+      FILESYSTEM_DISK: uploads
+      UPLOADS_ROOT: /var/www/html/storage/app/public
+      PRIVATE_UPLOADS_ROOT: /var/www/html/storage/app/private
     command: >
       php artisan migrate --force &&
       php artisan config:cache &&

@@ -120,7 +120,7 @@ class VendorOrdersController extends Controller
             ->first();
 
         // Pickup-handover columns are admin-only PII (collector identity,
-        // private R2 ID-image key, internal admin user id) — never expose
+        // private local ID-image key, internal admin user id) — never expose
         // them to vendors. Null-safe pre-migration: unset() on missing
         // properties is a no-op for stdClass rows.
         if ($order) {
