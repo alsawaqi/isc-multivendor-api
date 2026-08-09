@@ -37,6 +37,8 @@ services:
     image: composer:2
     working_dir: /app
     volumes:
+      - storage-data:/app/storage
+      - cache-data:/app/bootstrap/cache
       - ./src:/app:ro
       - vendor-data:/app/vendor
     command: sh -lc "composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader"
