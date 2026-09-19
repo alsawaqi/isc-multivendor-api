@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Vendor;
 use App\Http\Controllers\Controller;
 use App\Models\ProductTemporary;
 use App\Models\ProductMaster;
+use App\Services\VendorOffers;
 use App\Models\ProductVendorRequest;
 use App\Models\ProductSpecificationDescription;
 use App\Models\ProductSpecificationValue;
@@ -90,8 +91,7 @@ class VendorProductsController extends Controller
         $perPage = (int) $request->get('per_page', 20);
         $search  = trim((string) $request->get('search', ''));
 
-        $q = ProductMaster::query()
-            ->where('Vendor_Id', $vendorId)
+        $q = VendorOffers::products(ProductMaster::class, $vendorId)
             ->with(['defaultImage','department','subDepartment','subSubDepartment','brand','manufacture','type','specs'])
             ->when($search !== '', function ($qq) use ($search) {
                 $qq->where(function ($w) use ($search) {
@@ -130,8 +130,7 @@ class VendorProductsController extends Controller
             ->orderByDesc('Submitted_At')
             ->paginate($pendingPerPage, ['*'], 'pending_page');
 
-        $approved = ProductMaster::query()
-            ->where('Vendor_Id', $vendorId)
+        $approved = VendorOffers::products(ProductMaster::class, $vendorId)
             ->when($search !== '', function ($qq) use ($search) {
                 $qq->where(function ($w) use ($search) {
                     $w->where('Product_Name', 'like', "%{$search}%")
@@ -205,9 +204,7 @@ class VendorProductsController extends Controller
     {
         $vendorId = $this->vendorId();
 
-        $product = ProductMaster::query()
-            ->where('id', $id)
-            ->where('Vendor_Id', $vendorId)
+        $product = VendorOffers::products(ProductMaster::class, $vendorId)->where('id', $id)
             ->with(['vendor', 'department', 'subDepartment', 'subSubDepartment', 'brand', 'manufacture', 'type'])
             ->firstOrFail();
 
@@ -240,10 +237,13 @@ class VendorProductsController extends Controller
             'success' => true,
             'data' => [
                 'mode' => 'approved',
+                'seller_offer_mode' => VendorOffers::ready(),
                 'product' => $product,
                 'images' => $images,
                 'specs' => $specs,
-                'bulk_prices' => $this->loadBulkPrices('Products_Bulk_Prices_T', 'Products_Id', (int) $product->id),
+                'bulk_prices' => VendorOffers::ready()
+                    ? $this->loadBulkPrices('Products_Vendor_Offer_Bulk_Prices_T', 'Vendor_Offer_Id', (int) $product->Vendor_Offer_Id)
+                    : $this->loadBulkPrices('Products_Bulk_Prices_T', 'Products_Id', (int) $product->id),
                 'request_history' => $history,
                 'can_request_update' => true,
                 'has_open_update_request' => $hasOpenUpdateRequest,
@@ -284,11 +284,14 @@ class VendorProductsController extends Controller
         $vendorId = $this->vendorId();
         $user = Auth::guard('vendor')->user();
 
-        $product = ProductMaster::query()
-            ->where('id', $id)
-            ->where('Vendor_Id', $vendorId)
+        $product = VendorOffers::products(ProductMaster::class, $vendorId)->where('id', $id)
             ->firstOrFail();
 
+        if (VendorOffers::ready()) {
+            $request->validate([
+                'changes' => ['required', 'array:Product_Price,Product_Cost,Product_Stock,Status,bulk_prices', 'min:1'],
+            ], ['changes.array' => 'Shared catalogue fields cannot be changed through a seller offer. Submit only your price, stock, availability or bulk prices.']);
+        }
         $usesStructuredChanges = $request->has('changes');
 
         if ($usesStructuredChanges) {
@@ -306,6 +309,7 @@ class VendorProductsController extends Controller
                 'changes.Product_Description' => ['sometimes', 'string'],
                 'changes.Product_Price' => ['sometimes', 'numeric', 'min:0'],
                 'changes.Product_Cost' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+                'changes.Status' => ['sometimes', 'in:available,out_of_stock,discontinued'],
                 'changes.Product_Stock' => ['sometimes', 'integer', 'min:0'],
                 'changes.Weight_Kg' => ['sometimes', 'numeric', 'min:0'],
                 'changes.Length_Cm' => ['sometimes', 'numeric', 'min:0'],
@@ -382,6 +386,7 @@ class VendorProductsController extends Controller
             'Product_Name',
             'Product_Name_Ar',
             'Product_Description',
+            'Status',
             'Product_Price',
             'Product_Cost',
             'Product_Stock',
@@ -486,7 +491,14 @@ class VendorProductsController extends Controller
             ], 422);
         }
 
+        if (VendorOffers::ready()) {
+            $changes = array_intersect_key($changes, array_flip(['Product_Price', 'Product_Cost', 'Product_Stock', 'Status', 'bulk_prices']));
+            if (! $changes) {
+                return response()->json(['message' => 'Only your offer price, stock, availability and bulk prices can be changed here. Shared product content is managed by the administrator.'], 422);
+            }
+        }
         $requestRow = ProductVendorRequest::query()->create([
+            ...(VendorOffers::ready() ? ['Vendor_Offer_Id' => $product->Vendor_Offer_Id] : []),
             'Products_Temporary_Id' => null,
             'Products_Id'           => $product->id,
             'Vendor_Id'             => $vendorId,

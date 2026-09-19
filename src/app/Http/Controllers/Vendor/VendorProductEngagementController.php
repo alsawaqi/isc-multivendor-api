@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Vendor;
 
+use App\Services\VendorOffers;
+
 use App\Http\Controllers\Controller;
 use App\Models\ProductQuestion;
 use App\Models\ProductQuestionAnswer;
@@ -18,7 +20,9 @@ class VendorProductEngagementController extends Controller
         $vendorId = $this->vendorId();
 
         $query = ProductReview::query()
-            ->whereHas('product', fn ($product) => $product->where('Vendor_Id', $vendorId))
+            ->whereHas('product', fn ($product) => VendorOffers::ready()
+                ? $product->whereIn('id', \App\Models\ProductVendorOffer::where('Vendor_Id', $vendorId)->select('Products_Id'))
+                : $product->where('Vendor_Id', $vendorId))
             ->with([
                 'product:id,Product_Name,Product_Name_Ar,Slug,Vendor_Id',
                 'customer:id,Customer_Full_Name',
@@ -45,7 +49,7 @@ class VendorProductEngagementController extends Controller
     public function replyReview(Request $request, ProductReview $review)
     {
         $vendorId = $this->vendorId();
-        abort_unless((int) optional($review->product)->Vendor_Id === $vendorId, 403, 'This review does not belong to your catalog.');
+        abort_unless(VendorOffers::owns((int) $review->Products_Id, $vendorId), 403, 'This review does not belong to your catalog.');
 
         $validated = $request->validate([
             'body' => ['required', 'string', 'min:2', 'max:4000'],
@@ -66,7 +70,9 @@ class VendorProductEngagementController extends Controller
         $vendorId = $this->vendorId();
 
         $query = ProductQuestion::query()
-            ->whereHas('product', fn ($product) => $product->where('Vendor_Id', $vendorId))
+            ->whereHas('product', fn ($product) => VendorOffers::ready()
+                ? $product->whereIn('id', \App\Models\ProductVendorOffer::where('Vendor_Id', $vendorId)->select('Products_Id'))
+                : $product->where('Vendor_Id', $vendorId))
             ->with([
                 'product:id,Product_Name,Product_Name_Ar,Slug,Vendor_Id',
                 'customer:id,Customer_Full_Name',
@@ -92,7 +98,7 @@ class VendorProductEngagementController extends Controller
     public function answerQuestion(Request $request, ProductQuestion $question)
     {
         $vendorId = $this->vendorId();
-        abort_unless((int) optional($question->product)->Vendor_Id === $vendorId, 403, 'This question does not belong to your catalog.');
+        abort_unless(VendorOffers::owns((int) $question->Products_Id, $vendorId), 403, 'This question does not belong to your catalog.');
 
         $validated = $request->validate([
             'body' => ['required', 'string', 'min:2', 'max:4000'],

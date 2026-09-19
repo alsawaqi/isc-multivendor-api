@@ -30,8 +30,8 @@ class ProductMaster extends Model
     ];
 
     protected $casts = [
-        'Product_Price' => 'decimal:2',
-        'Product_Cost'  => 'decimal:2',
+        'Product_Price' => 'decimal:3',
+        'Product_Cost'  => 'decimal:3',
         'Product_Stock' => 'integer',
     ];
 

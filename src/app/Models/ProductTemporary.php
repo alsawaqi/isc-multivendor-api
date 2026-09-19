@@ -20,6 +20,7 @@ class ProductTemporary extends Model
     public $timestamps = true;
 
     protected $fillable = [
+        'Vendor_Offer_Id',
         'Vendor_Id',
         'Temp_Product_Code',
 

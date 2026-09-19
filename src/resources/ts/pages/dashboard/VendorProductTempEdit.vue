@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import VendorLayout from "@/components/layout/VendorLayout.vue"
 import VendorPageHeader from "@/components/layout/VendorPageHeader.vue"
+import VendorOfferEditor from "@/components/products/VendorOfferEditor.vue"
 import BulkPriceEditor from "@/components/products/BulkPriceEditor.vue"
 import api from "@/services/api"
 import { describeRange, tiersEqual, tiersFromApi, tiersToPayload, validateTiers, type BulkTier } from "@/services/bulkPricing"
@@ -23,6 +24,7 @@ const productId = computed(() => Number(route.params.id))
 const R2 = import.meta.env.VITE_R2_URL || ""
 const isApprovedUpdate = computed(() => route.name === "vendor.product.approved.edit")
 
+const sellerOfferMode = ref(false)
 const step = ref<1 | 2 | 3 | 4 | 5>(1)
 const loading = ref(false)
 const busy = ref(false)
@@ -94,7 +96,7 @@ const stepTitle = computed(() => {
 const pageTitle = computed(() => isApprovedUpdate.value ? "Request Product Update" : "Edit & Resubmit Product")
 const pageDescription = computed(() =>
   isApprovedUpdate.value
-    ? "Update live product information, specifications, and images. Your changes will be sent to admin for approval."
+    ? "Submit your price, stock and bulk pricing changes for admin approval. Shared product information is managed by the administrator."
     : "Update product details, specifications, and images before sending it back to admin review."
 )
 const submitLabel = computed(() => isApprovedUpdate.value ? "Submit Update Request" : "Resubmit for Review")
@@ -219,9 +221,11 @@ async function loadProduct() {
   initialized.value = false
 
   try {
-    await loadCatalog()
     const { data } = await api.get(`/vendor/api/products/${isApprovedUpdate.value ? "approved" : "pending"}/${productId.value}`)
     const detail = data?.data || {}
+    sellerOfferMode.value = Boolean(detail.seller_offer_mode)
+    if (isApprovedUpdate.value && sellerOfferMode.value) return
+    await loadCatalog()
     const p = detail.product || {}
 
     form.product_department_id = Number(p.Product_Department_Id || 0)
@@ -456,7 +460,9 @@ onBeforeUnmount(() => {
         </template>
       </VendorPageHeader>
 
-      <div class="mt-5 rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-sm overflow-hidden">
+      <p v-if="loading" role="status" class="mt-5">Loading your product…</p>
+      <VendorOfferEditor v-else-if="isApprovedUpdate && sellerOfferMode" :product-id="productId" />
+      <div v-else class="mt-5 rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-sm overflow-hidden">
         <div class="px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div class="flex items-center gap-3">
             <div class="h-9 w-9 rounded-xl bg-primary-600 text-white flex items-center justify-center font-semibold">
@@ -511,7 +517,7 @@ onBeforeUnmount(() => {
         <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">Loading product...</p>
       </div>
 
-      <div v-else class="mt-5 space-y-4">
+      <div v-else-if="!isApprovedUpdate || !sellerOfferMode" class="mt-5 space-y-4">
         <main>
           <transition name="fade-slide" mode="out-in">
             <section
@@ -759,7 +765,7 @@ onBeforeUnmount(() => {
         </main>
       </div>
 
-      <div class="sticky bottom-3 z-30 mt-6">
+      <div v-if="!loading && (!isApprovedUpdate || !sellerOfferMode)" class="sticky bottom-3 z-30 mt-6">
         <div class="rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white/90 dark:bg-slate-950/80 backdrop-blur-xl shadow-sm px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
           <div class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
             Step <span class="font-semibold text-slate-800 dark:text-slate-100">{{ step }}</span> of 5

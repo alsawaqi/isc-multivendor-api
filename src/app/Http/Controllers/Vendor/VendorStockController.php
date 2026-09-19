@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Vendor;
 
 use App\Http\Controllers\Controller;
 use App\Models\ProductMaster;
+use App\Services\VendorOffers;
 use App\Models\ProductStockMovement;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -40,8 +41,7 @@ class VendorStockController extends Controller
             $sortDir = 'asc';
         }
 
-        $products = ProductMaster::query()
-            ->where('Vendor_Id', $vendorId)
+        $products = VendorOffers::products(ProductMaster::class, $vendorId)
             ->with(['defaultImage', 'department', 'subDepartment', 'subSubDepartment'])
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($where) use ($search) {
@@ -69,13 +69,15 @@ class VendorStockController extends Controller
         ]);
 
         $result = DB::transaction(function () use ($validated, $id, $vendorId) {
-            $product = ProductMaster::query()
-                ->where('id', $id)
-                ->where('Vendor_Id', $vendorId)
-                ->lockForUpdate()
+            // Keep the same master-before-offer lock order as checkout.
+            ProductMaster::whereKey($id)->lockForUpdate()->firstOrFail();
+            $stockTarget = VendorOffers::ready() ? VendorOffers::forVendor($id, $vendorId, true) : null;
+            $product = VendorOffers::products(ProductMaster::class, $vendorId)->where('id', $id)
+                ->when(!VendorOffers::ready(), fn ($q) => $q->lockForUpdate())
                 ->firstOrFail();
 
-            $previousStock = (int) ($product->Product_Stock ?? 0);
+            $stockTarget ??= $product;
+            $previousStock = (int) ($stockTarget->Product_Stock ?? 0);
             $movementType = $validated['movement_type'];
             $quantity = $movementType === 'set'
                 ? abs((int) $validated['new_stock'] - $previousStock)
@@ -100,7 +102,7 @@ class VendorStockController extends Controller
 
             $currentStatus = (string) ($product->Status ?? 'available');
 
-            $product->forceFill([
+            $stockTarget->forceFill([
                 'Product_Stock' => $newStock,
                 'Status' => $currentStatus === 'discontinued'
                     ? 'discontinued'
@@ -123,7 +125,7 @@ class VendorStockController extends Controller
             ]);
 
             return [
-                'product' => $product->fresh(['defaultImage', 'department', 'subDepartment', 'subSubDepartment']),
+                'product' => VendorOffers::products(ProductMaster::class, $vendorId)->where('id', $id)->with(['defaultImage', 'department', 'subDepartment', 'subSubDepartment'])->first(),
                 'movement' => $movement,
             ];
         });
@@ -139,9 +141,7 @@ class VendorStockController extends Controller
     {
         $vendorId = $this->vendorId();
 
-        ProductMaster::query()
-            ->where('id', $id)
-            ->where('Vendor_Id', $vendorId)
+        VendorOffers::products(ProductMaster::class, $vendorId)->where('id', $id)
             ->firstOrFail();
 
         $perPage = min(max((int) $request->query('per_page', 10), 1), 50);
